@@ -1,0 +1,133 @@
+name: CI
+
+on:
+  push:
+  pull_request:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ci-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+env:
+  GOFLAGS: -mod=readonly
+
+jobs:
+  frontend:
+    name: Frontend build
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: frontend
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Type-check and build
+        run: npm run build
+
+  backend:
+    name: Backend tests
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - name: Build frontend assets for go:embed
+        run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+
+      - name: Install GTK3 + WebKitGTK build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev
+
+      - name: Verify formatting
+        run: |
+          files="$(find . -name '*.go' -not -path './build/*' -print0 | xargs -0 gofmt -l)"
+          if [ -n "$files" ]; then
+            echo "These files are not gofmt-formatted:"
+            echo "$files"
+            exit 1
+          fi
+
+      - name: Vet
+        run: go vet -tags gtk3 ./internal/... .
+
+      - name: Test
+        run: go test -tags gtk3 -race ./internal/...
+
+      - name: Build desktop binary
+        run: go build -tags gtk3 -trimpath -o /tmp/asdf-gui .
+
+  audit:
+    name: Dependency and vulnerability audit
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install GTK3 + WebKitGTK build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            pkg-config \
+            libgtk-3-dev \
+            libwebkit2gtk-4.1-dev
+
+      - name: Verify Go module checksums
+        run: go mod verify
+
+      - name: Build frontend assets for go:embed
+        run: |
+          npm ci
+          npm run build
+        working-directory: frontend
+
+      - name: Install govulncheck
+        run: go install golang.org/x/vuln/cmd/govulncheck@latest
+
+      - name: Scan Go code and dependencies
+        run: govulncheck -tags gtk3 ./internal/... .
+
+      - name: Audit npm dependencies
+        run: npm audit --audit-level=high
+        working-directory: frontend

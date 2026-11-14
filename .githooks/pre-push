@@ -1,0 +1,7 @@
+#!/usr/bin/env bash
+# Block pushes while direct Go/npm dependencies are outdated.
+# Bypass deliberately with: SKIP_DEPS_CHECK=1 git push
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/check-outdated-deps.sh" --strict
