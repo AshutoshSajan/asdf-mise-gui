@@ -3,3 +3,5 @@
 bin
 frontend/dist
 frontend/node_modules
+build/linux/appimage/*
+!build/linux/appimage/build.sh
