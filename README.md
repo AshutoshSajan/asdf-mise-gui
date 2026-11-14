@@ -17,6 +17,8 @@
   &nbsp;·&nbsp;
   <a href="#features"><strong>Features</strong></a>
   &nbsp;·&nbsp;
+  <a href="#screenshots"><strong>Screenshots</strong></a>
+  &nbsp;·&nbsp;
   <a href="#architecture"><strong>Architecture</strong></a>
   &nbsp;·&nbsp;
   <a href="#development"><strong>Development</strong></a>
@@ -43,6 +45,50 @@
 
 > [!IMPORTANT]
 > **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf CLI through typed Wails services. Linux AppImages are built automatically from version tags. Expect breaking changes before 1.0. macOS and Linux are supported. Native Windows is not supported in v1 — use the Linux build inside WSL2.
+
+## Screenshots
+
+Every screen below is real data from the running app. Click an image to open
+the full-size capture.
+
+<table>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/dashboard.png"><img src="./docs/assets/screenshots/dashboard.png" alt="Dashboard with asdf engine status, plugin and version counts, active project pins, and recent operations" width="100%" /></a>
+      <br/>
+      <sub><strong>Dashboard</strong> — engine health, toolchain counts, and project state at a glance.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/tools.png"><img src="./docs/assets/screenshots/tools.png" alt="Tools screen with installed versions, active pins, latest versions, and per-version actions" width="100%" /></a>
+      <br/>
+      <sub><strong>Tools</strong> — installed versions, resolved pins, latest releases, and one-click installs.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/plugins.png"><img src="./docs/assets/screenshots/plugins.png" alt="Plugins screen listing installed asdf plugins with git refs, repository URLs, version and update actions" width="100%" /></a>
+      <br/>
+      <sub><strong>Plugins</strong> — registry search, git refs, and update or remove actions.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/project.png"><img src="./docs/assets/screenshots/project.png" alt="Project screen editing a .tool-versions file with active and missing version badges, recent projects, and global pins" width="100%" /></a>
+      <br/>
+      <sub><strong>Project</strong> — edit <code>.tool-versions</code> without losing comments or ordering.</sub>
+    </td>
+  </tr>
+  <tr>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/operations.png"><img src="./docs/assets/screenshots/operations.png" alt="Operations screen showing a running nodejs install with streamed output, queue counts, and cancel controls" width="100%" /></a>
+      <br/>
+      <sub><strong>Operations</strong> — one serialized queue, live output, and a persisted log for every run.</sub>
+    </td>
+    <td width="50%" valign="top">
+      <a href="./docs/assets/screenshots/settings.png"><img src="./docs/assets/screenshots/settings.png" alt="Settings screen with asdf detection, data directory, default workspace, theme selection, and diagnostics" width="100%" /></a>
+      <br/>
+      <sub><strong>Settings</strong> — detect asdf, choose a workspace, pick a theme, and run diagnostics.</sub>
+    </td>
+  </tr>
+</table>
 
 ## Why another version manager UI?
 
@@ -161,6 +207,11 @@ git clone https://github.com/AshutoshSajan/asdf-gui.git
 cd asdf-gui
 task dev
 ```
+
+If the build stops with `Package 'gtk4' ... not found` or
+`Package 'webkitgtk-6.0' ... not found`, run `task dev:gtk3` instead. It uses
+the GTK3/WebKit2GTK 4.1 backend already available on that machine — the rest of
+the app is identical.
 
 The first run installs the frontend dependencies, generates the TypeScript
 bindings from the Go services, and starts the Wails dev server with hot reload.
@@ -346,6 +397,8 @@ task hooks:install   # install the repository git hooks
 
 > Local Linux builds need `-tags gtk3` only when the GTK4/WebKitGTK 6.0 headers
 > are unavailable. The `dev:gtk3` and `build:gtk3` tasks pass the tag for you.
+> `wails3` bundles Task, so if `task` is not on your `PATH`, use
+> `wails3 task dev:gtk3` (or prefix any other task the same way).
 
 Regenerate the TypeScript bindings after changing a Wails service signature:
 
@@ -403,7 +456,7 @@ same report without failing.
 ├── .github/workflows/          # CI, audit, and release automation
 ├── .githooks/                  # dependency freshness gates
 ├── scripts/                    # dependency check helper
-├── docs/assets/                # README artwork
+├── docs/assets/                # README banner and app screenshots
 └── Taskfile.yml                # developer entrypoints
 ```
 
