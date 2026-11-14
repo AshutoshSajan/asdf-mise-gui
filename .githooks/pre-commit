@@ -1,0 +1,6 @@
+#!/usr/bin/env bash
+# Warn about outdated dependencies when a dependency manifest is committed.
+set -euo pipefail
+
+ROOT="$(git rev-parse --show-toplevel)"
+exec "$ROOT/scripts/check-outdated-deps.sh" --staged

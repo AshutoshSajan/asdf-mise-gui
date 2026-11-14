@@ -1,0 +1,153 @@
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import {
+  ManagerService,
+  OperationService,
+  PluginsService,
+  ProjectService,
+  SettingsService,
+  ToolsService,
+} from "./bindings";
+
+export const queryKeys = {
+  status: ["status"] as const,
+  tools: ["tools"] as const,
+  plugins: ["plugins"] as const,
+  pluginCatalog: ["plugin-catalog"] as const,
+  operations: ["operations"] as const,
+  operation: (id: string) => ["operation", id] as const,
+  project: (dir: string) => ["project", dir] as const,
+  recent: ["recent-projects"] as const,
+  settings: ["settings"] as const,
+  diagnostics: ["diagnostics"] as const,
+  available: (tool: string) => ["available", tool] as const,
+  latest: ["latest"] as const,
+};
+
+export function useStatus(refresh = false) {
+  return useQuery({
+    queryKey: queryKeys.status,
+    queryFn: () => ManagerService.Status(refresh),
+    staleTime: 10_000,
+  });
+}
+
+export function useTools() {
+  return useQuery({
+    queryKey: queryKeys.tools,
+    queryFn: () => ToolsService.List(),
+    staleTime: 5_000,
+  });
+}
+
+export function usePlugins() {
+  return useQuery({
+    queryKey: queryKeys.plugins,
+    queryFn: () => PluginsService.List(),
+    staleTime: 10_000,
+  });
+}
+
+export function usePluginCatalog(enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.pluginCatalog,
+    queryFn: () => PluginsService.Available(),
+    staleTime: 24 * 60 * 60 * 1000,
+    enabled,
+  });
+}
+
+export function useOperations() {
+  return useQuery({
+    queryKey: queryKeys.operations,
+    queryFn: () => OperationService.List(),
+    staleTime: 2_000,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      if (!data) return false;
+      const active = data.some(
+        (operation) =>
+          operation.status === "queued" || operation.status === "running" || operation.status === "canceling",
+      );
+      return active ? 4_000 : false;
+    },
+  });
+}
+
+export function useOperation(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.operation(id ?? ""),
+    queryFn: () => OperationService.Get(id as string),
+    enabled: Boolean(id),
+    staleTime: 500,
+    refetchInterval: (query) => {
+      const status = query.state.data?.operation.status;
+      const active = status === "queued" || status === "running" || status === "canceling";
+      return active ? 700 : false;
+    },
+  });
+}
+
+export function useProject(dir: string, remember = false, enabled = true) {
+  return useQuery({
+    queryKey: queryKeys.project(dir),
+    queryFn: () => ProjectService.Open(dir, remember),
+    enabled,
+    staleTime: 5_000,
+  });
+}
+
+export function useRecentProjects() {
+  return useQuery({
+    queryKey: queryKeys.recent,
+    queryFn: () => ProjectService.Recent(),
+    staleTime: 10_000,
+  });
+}
+
+export function useSettings() {
+  return useQuery({
+    queryKey: queryKeys.settings,
+    queryFn: () => SettingsService.Get(),
+    staleTime: 10_000,
+  });
+}
+
+export function useDiagnostics(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.diagnostics,
+    queryFn: () => ManagerService.Diagnostics(),
+    staleTime: 15_000,
+    enabled,
+  });
+}
+
+export function useAvailableVersions(tool: string | null) {
+  return useQuery({
+    queryKey: queryKeys.available(tool ?? ""),
+    queryFn: () => ToolsService.Available(tool as string),
+    enabled: Boolean(tool),
+    staleTime: 5 * 60 * 1000,
+    retry: false,
+  });
+}
+
+export function useLatestVersions() {
+  return useQuery({
+    queryKey: queryKeys.latest,
+    queryFn: () => ToolsService.LatestAll(),
+    staleTime: 60_000,
+  });
+}
+
+export function useInvalidateAppData() {
+  const queryClient = useQueryClient();
+  return () => {
+    void queryClient.invalidateQueries({ queryKey: queryKeys.operations });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.status });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.tools });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.plugins });
+    void queryClient.invalidateQueries({ queryKey: ["project"] });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.latest });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.recent });
+  };
+}

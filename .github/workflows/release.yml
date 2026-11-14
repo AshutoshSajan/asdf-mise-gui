@@ -1,0 +1,115 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - "v*"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+concurrency:
+  group: release-${{ github.ref }}
+  cancel-in-progress: false
+
+jobs:
+  appimage:
+    name: Build Linux AppImage
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install GTK4 + WebKitGTK 6.0 build dependencies
+        run: |
+          sudo apt-get update
+          sudo apt-get install --yes --no-install-recommends \
+            build-essential \
+            pkg-config \
+            file \
+            wget \
+            patchelf \
+            dpkg-dev \
+            desktop-file-utils \
+            libglib2.0-bin \
+            libgtk-4-dev \
+            libwebkitgtk-6.0-dev \
+            libsoup-3.0-dev \
+            librsvg2-dev
+
+      - name: Install Wails and Task
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          go install github.com/go-task/task/v3/cmd/task@v3.54.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Sync version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: |
+          VERSION="${RELEASE_VERSION#v}"
+          sed -i -E "s/^  version: \".*\"/  version: \"${VERSION}\"/" build/config.yml
+          sed -i -E "s/^version: \".*\"/version: \"${VERSION}\"/" build/linux/nfpm/nfpm.yaml
+          VERSION="$VERSION" node - <<'NODE'
+          const fs = require("node:fs");
+          const version = process.env.VERSION;
+          const pkg = JSON.parse(fs.readFileSync("frontend/package.json", "utf8"));
+          pkg.version = version;
+          fs.writeFileSync("frontend/package.json", JSON.stringify(pkg, null, 2) + "\n");
+          const lock = JSON.parse(fs.readFileSync("frontend/package-lock.json", "utf8"));
+          lock.version = version;
+          if (lock.packages && lock.packages[""]) lock.packages[""].version = version;
+          fs.writeFileSync("frontend/package-lock.json", JSON.stringify(lock, null, 2) + "\n");
+          NODE
+          echo "Building asdf GUI ${VERSION}"
+
+      - name: Build AppImage
+        run: wails3 task linux:create:appimage
+
+      - name: Verify AppImage
+        run: |
+          set -euo pipefail
+          APPIMAGE="$(find bin -maxdepth 1 -name 'asdf-gui-*.AppImage' -print -quit)"
+          if [ -z "$APPIMAGE" ]; then
+            echo "No AppImage produced in bin/"
+            ls -la bin || true
+            exit 1
+          fi
+          test -x "$APPIMAGE"
+          "$APPIMAGE" --appimage-extract >/dev/null
+          test -x squashfs-root/AppRun
+          test -f squashfs-root/asdf-gui.desktop
+          rm -rf squashfs-root
+          ls -lh "$APPIMAGE"
+          echo "APPIMAGE=$APPIMAGE" >> "$GITHUB_ENV"
+
+      - name: Upload workflow artifact
+        uses: actions/upload-artifact@v7
+        with:
+          name: asdf-gui-appimage
+          path: bin/*.AppImage
+          if-no-files-found: error
+
+      - name: Publish GitHub release
+        if: startsWith(github.ref, 'refs/tags/v')
+        uses: softprops/action-gh-release@v3
+        with:
+          files: bin/*.AppImage
+          generate_release_notes: true
+          fail_on_unmatched_files: true
