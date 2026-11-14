@@ -114,12 +114,7 @@ func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 		view.Plugins = asdf.ParsePluginNames(result.Stdout)
 	}
 
-	for _, tool := range view.Current {
-		if !tool.Installed {
-			view.Missing = append(view.Missing, tool.Name)
-		}
-	}
-	view.Missing = uniqueSorted(view.Missing)
+	view.Missing = missingTools(view.Current)
 
 	pluginSet := map[string]bool{}
 	for _, plugin := range view.Plugins {
@@ -261,6 +256,19 @@ func (s *ProjectService) resolveDir(dir string) (string, error) {
 		return "", fmt.Errorf("project directory does not exist: %s", abs)
 	}
 	return abs, nil
+}
+
+func missingTools(current []asdf.CurrentTool) []string {
+	var missing []string
+	for _, tool := range current {
+		// `asdf current` lists every plugin, including ones that are not
+		// pinned anywhere. Those have no resolved versions and are not
+		// missing, so only flag tools that resolve to a real version.
+		if len(tool.Versions) > 0 && !tool.Installed {
+			missing = append(missing, tool.Name)
+		}
+	}
+	return uniqueSorted(missing)
 }
 
 func uniqueSorted(values []string) []string {

@@ -108,13 +108,13 @@ export function Dashboard() {
         <StatCard
           label="Plugins"
           value={status.data ? String(status.data.pluginCount) : "—"}
-          hint={`${pluralize(status.data?.pluginCount ?? 0, "plugin")} installed`}
+          hint={`${status.data?.pluginCount ?? 0} ${pluralize(status.data?.pluginCount ?? 0, "plugin")} installed`}
           icon={<Package className="size-4" />}
         />
         <StatCard
           label="Installed versions"
           value={status.data ? String(status.data.versionCount) : "—"}
-          hint={`across ${pluralize(status.data?.toolCount ?? 0, "tool")}`}
+          hint={`across ${status.data?.toolCount ?? 0} ${pluralize(status.data?.toolCount ?? 0, "tool")}`}
           icon={<Layers className="size-4" />}
         />
         <StatCard

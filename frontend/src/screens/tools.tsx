@@ -351,7 +351,7 @@ function ToolRow({
 
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-faint">
             <span>
-              {pluralize(installed.length, "version")} installed
+              {installed.length} {pluralize(installed.length, "version")} installed
             </span>
             {current.length > 0 ? (
               <span className="truncate">

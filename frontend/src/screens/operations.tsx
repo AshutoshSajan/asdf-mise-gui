@@ -85,7 +85,7 @@ export function Operations({ selectedID }: { selectedID: string | null }) {
     try {
       const removed = await OperationService.ClearFinished();
       toast({
-        title: removed > 0 ? `Cleared ${pluralize(removed, "operation")}` : "Nothing to clear",
+        title: removed > 0 ? `Cleared ${removed} ${pluralize(removed, "operation")}` : "Nothing to clear",
         description: removed > 0 ? "Finished operations were removed from this session." : "Only finished operations can be cleared.",
         variant: "info",
       });
@@ -377,7 +377,7 @@ function OperationDetail({ id }: { id: string | null }) {
                 streaming
               </span>
             ) : null}
-            <span>{pluralize(lines.length, "line")}</span>
+            <span>{lines.length} {pluralize(lines.length, "line")}</span>
           </div>
         </div>
         <OperationOutput lines={lines} live={live} />

@@ -264,7 +264,7 @@ export function Project() {
                   {dirty ? <Badge variant="warning" className="text-[10px]">unsaved</Badge> : null}
                 </div>
                 <span className="text-[10px] text-faint">
-                  {pluralize(entries.length, "tool")} pinned
+                  {entries.length} {pluralize(entries.length, "tool")} pinned
                 </span>
               </div>
 
@@ -556,7 +556,7 @@ function GlobalFile({ view }: { view?: ProjectView }) {
       <CardHeader>
         <CardTitle>Global pins</CardTitle>
         <Badge variant="outline" className="text-[10px]">
-          {pluralize(entries.length, "tool")}
+          {entries.length} {pluralize(entries.length, "tool")}
         </Badge>
       </CardHeader>
       <CardContent className="pt-3">
