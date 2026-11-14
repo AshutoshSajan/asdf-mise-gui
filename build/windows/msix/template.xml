@@ -1,0 +1,54 @@
+<?xml version="1.0" encoding="utf-8"?>
+<MsixPackagingToolTemplate
+    xmlns="http://schemas.microsoft.com/msix/packaging/msixpackagingtool/template/2022">
+    <Settings
+        AllowTelemetry="false"
+        ApplyACLsToPackageFiles="true"
+        GenerateCommandLineFile="true"
+        AllowPromptForPassword="false">
+    </Settings>
+    <Installer
+        Path="asdf-gui"
+        Arguments=""
+        InstallLocation="C:\Program Files\Ashutosh Sajan\asdf GUI">
+    </Installer>
+    <PackageInformation
+        PackageName="asdf GUI"
+        PackageDisplayName="asdf GUI"
+        PublisherName="CN=Ashutosh Sajan"
+        PublisherDisplayName="Ashutosh Sajan"
+        Version="0.1.0.0"
+        PackageDescription="A desktop GUI for the asdf version manager">
+        <Capabilities>
+            <Capability Name="runFullTrust" />
+            
+        </Capabilities>
+        <Applications>
+            <Application
+                Id="io.github.ashutoshsajan.asdfgui"
+                Description="A desktop GUI for the asdf version manager"
+                DisplayName="asdf GUI"
+                ExecutableName="asdf-gui"
+                EntryPoint="Windows.FullTrustApplication">
+                
+            </Application>
+        </Applications>
+        <Resources>
+            <Resource Language="en-us" />
+        </Resources>
+        <Dependencies>
+            <TargetDeviceFamily Name="Windows.Desktop" MinVersion="10.0.17763.0" MaxVersionTested="10.0.19041.0" />
+        </Dependencies>
+        <Properties>
+            <Framework>false</Framework>
+            <DisplayName>asdf GUI</DisplayName>
+            <PublisherDisplayName>Ashutosh Sajan</PublisherDisplayName>
+            <Description>A desktop GUI for the asdf version manager</Description>
+            <Logo>Assets\AppIcon.png</Logo>
+        </Properties>
+    </PackageInformation>
+    <SaveLocation PackagePath="asdf-gui.msix" />
+    <PackageIntegrity>
+        <CertificatePath></CertificatePath>
+    </PackageIntegrity>
+</MsixPackagingToolTemplate>
