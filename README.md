@@ -50,8 +50,8 @@
 ## Screenshots
 
 Every screen below is real data from the running app. Click an image to open
-the full-size capture. The screenshots show the pre-rename name; the UI now
-reads **asdf mise GUI**.
+the full-size capture. These captures predate the rename and used the asdf
+engine; the app now reads **asdf mise GUI** and drives either asdf or mise.
 
 <table>
   <tr>
@@ -68,14 +68,14 @@ reads **asdf mise GUI**.
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/plugins.png"><img src="./docs/assets/screenshots/plugins.png" alt="Plugins screen listing installed asdf plugins with git refs, repository URLs, version and update actions" width="100%" /></a>
+      <a href="./docs/assets/screenshots/plugins.png"><img src="./docs/assets/screenshots/plugins.png" alt="Plugins screen listing installed plugins with git refs, repository URLs, and version and update actions" width="100%" /></a>
       <br/>
       <sub><strong>Plugins</strong> — registry search, git refs, and update or remove actions.</sub>
     </td>
     <td width="50%" valign="top">
       <a href="./docs/assets/screenshots/project.png"><img src="./docs/assets/screenshots/project.png" alt="Project screen editing a .tool-versions file with active and missing version badges, recent projects, and global pins" width="100%" /></a>
       <br/>
-      <sub><strong>Project</strong> — edit <code>.tool-versions</code> without losing comments or ordering.</sub>
+      <sub><strong>Project</strong> — edit <code>.tool-versions</code> or <code>mise.toml</code> and install missing pins.</sub>
     </td>
   </tr>
   <tr>
@@ -85,9 +85,9 @@ reads **asdf mise GUI**.
       <sub><strong>Operations</strong> — one serialized queue, live output, and a persisted log for every run.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/settings.png"><img src="./docs/assets/screenshots/settings.png" alt="Settings screen with asdf detection, data directory, default workspace, theme selection, and diagnostics" width="100%" /></a>
+      <a href="./docs/assets/screenshots/settings.png"><img src="./docs/assets/screenshots/settings.png" alt="Settings screen with asdf or mise detection, data directory, default workspace, theme selection, and diagnostics" width="100%" /></a>
       <br/>
-      <sub><strong>Settings</strong> — detect asdf, choose a workspace, pick a theme, and run diagnostics.</sub>
+      <sub><strong>Settings</strong> — detect asdf or mise, choose a workspace, pick a theme, and run diagnostics.</sub>
     </td>
   </tr>
 </table>
@@ -593,7 +593,7 @@ Windows 11's WSLg provides the display and audio integration.
 - [x] Serialized operation queue with streamed output, cancellation, and log files
 - [x] Comment-preserving `.tool-versions` editing with atomic writes
 - [x] Typed Wails services and generated TypeScript bindings
-- [x] Dark-first app shell, dashboard, and shared UI primitives
+- [x] Theme-aware app shell, dashboard, and shared UI primitives
 - [x] Tools, plugins, project, operations, and settings screens
 - [x] CI for tests, builds, vulnerability scans, and dependency audits
 - [x] Tag-driven Linux AppImage releases
