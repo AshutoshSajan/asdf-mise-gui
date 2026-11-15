@@ -50,3 +50,10 @@ export function Reset(): $CancellablePromise<$models.SettingsView> {
 export function Save(next: settings$0.Settings): $CancellablePromise<$models.SettingsView> {
     return $Call.ByID(1040351028, next);
 }
+
+/**
+ * WSLDistros lists installed WSL distributions for the settings picker.
+ */
+export function WSLDistros(): $CancellablePromise<string[] | null> {
+    return $Call.ByID(2824102115);
+}
