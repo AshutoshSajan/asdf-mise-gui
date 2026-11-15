@@ -13,6 +13,7 @@ import (
 	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
 	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
 	"github.com/AshutoshSajan/asdf-mise-gui/internal/settings"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/version"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -28,6 +29,7 @@ func NewManagerService(rt *core.Runtime) *ManagerService {
 type Status struct {
 	Detection    asdf.Detection    `json:"detection"`
 	Settings     settings.Settings `json:"settings"`
+	AppVersion   string            `json:"appVersion"`
 	Engine       string            `json:"engine"`
 	OS           string            `json:"os"`
 	Arch         string            `json:"arch"`
@@ -59,6 +61,7 @@ func (s *ManagerService) Status(refresh bool) Status {
 	status := Status{
 		Detection:    detection,
 		Settings:     appSettings,
+		AppVersion:   version.Version,
 		Engine:       s.rt.Engine(),
 		OS:           runtime.GOOS,
 		Arch:         runtime.GOARCH,

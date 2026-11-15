@@ -10,5 +10,6 @@ export interface Settings {
     "dataDir": string;
     "defaultProjectDir": string;
     "theme": string;
+    "checkForUpdates": boolean;
     "recentProjects": string[] | null;
 }

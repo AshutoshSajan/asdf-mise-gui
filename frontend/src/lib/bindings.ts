@@ -5,6 +5,7 @@ export {
   ProjectService,
   SettingsService,
   ToolsService,
+  UpdateService,
 } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services";
 
 export type {
@@ -15,6 +16,7 @@ export type {
   SettingsView,
   Status as ManagerStatus,
   ToolView,
+  UpdateStatus,
 } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services/models";
 
 export type { Detail, Operation, OutputLine } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/ops/models";

@@ -89,6 +89,18 @@ export function errorMessage(error: unknown): string {
   return String(error);
 }
 
+export function formatBytes(value: number): string {
+  if (!Number.isFinite(value) || value <= 0) return "0 B";
+  const units = ["B", "KB", "MB", "GB"];
+  let amount = value;
+  let unit = 0;
+  while (amount >= 1024 && unit < units.length - 1) {
+    amount /= 1024;
+    unit += 1;
+  }
+  return `${amount.toFixed(unit === 0 ? 0 : 1)} ${units[unit]}`;
+}
+
 export function hostnameFromURL(rawURL: string): string {
   try {
     return new URL(rawURL).hostname.replace(/^www\./, "");

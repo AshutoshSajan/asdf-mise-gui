@@ -15,6 +15,7 @@ type Settings struct {
 	DataDir           string   `json:"dataDir"`
 	DefaultProjectDir string   `json:"defaultProjectDir"`
 	Theme             string   `json:"theme"`
+	CheckForUpdates   bool     `json:"checkForUpdates"`
 	RecentProjects    []string `json:"recentProjects"`
 }
 
@@ -65,7 +66,7 @@ func Load() (*Store, error) {
 	}
 	store := &Store{
 		path: filepath.Join(dir, "settings.json"),
-		data: Settings{Theme: "dark"},
+		data: Settings{Theme: "dark", CheckForUpdates: true},
 	}
 	raw, err := os.ReadFile(store.path)
 	if err != nil {
@@ -77,11 +78,28 @@ func Load() (*Store, error) {
 		}
 		return nil, err
 	}
-	if err := json.Unmarshal(raw, &store.data); err != nil {
+	if err := decodeSettings(raw, &store.data); err != nil {
 		return nil, fmt.Errorf("read settings: %w", err)
 	}
 	store.data = sanitize(store.data)
 	return store, nil
+}
+
+// decodeSettings preserves the opt-out default for update checks. Settings
+// written before the updater existed have no checkForUpdates key, and a plain
+// bool would decode those as false.
+func decodeSettings(raw []byte, value *Settings) error {
+	var fields map[string]json.RawMessage
+	if err := json.Unmarshal(raw, &fields); err != nil {
+		return err
+	}
+	if err := json.Unmarshal(raw, value); err != nil {
+		return err
+	}
+	if field, ok := fields["checkForUpdates"]; !ok || string(field) == "null" {
+		value.CheckForUpdates = true
+	}
+	return nil
 }
 
 // migrateSettings imports a pre-rename settings file the first time the new
@@ -93,7 +111,7 @@ func migrateSettings(store *Store, legacyPath string) bool {
 		return false
 	}
 	var legacy Settings
-	if err := json.Unmarshal(raw, &legacy); err != nil {
+	if err := decodeSettings(raw, &legacy); err != nil {
 		return false
 	}
 	// Save updates the in-memory value before writing, so a failed migration

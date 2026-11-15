@@ -8,12 +8,13 @@ import {
   OperationUpdated,
   StateChanged,
 } from "./lib/bindings";
-import { useInvalidateAppData, useStatus } from "./lib/query";
+import { useCheckForUpdates, useInvalidateAppData, useStatus } from "./lib/query";
 import { useRoute } from "./lib/route";
 import { applyTheme, normalizeTheme, readStoredTheme } from "./lib/theme";
 import { Sidebar } from "./components/shell/sidebar";
 import { Topbar } from "./components/shell/topbar";
 import { StatusBar } from "./components/shell/status-bar";
+import { UpdateCenter } from "./components/update-center";
 import { TooltipProvider } from "./components/ui/tooltip";
 import { ToastProvider, useToast } from "./components/ui/toast";
 import { Dashboard } from "./screens/dashboard";
@@ -45,14 +46,33 @@ function Shell() {
   const route = useRoute();
   const status = useStatus();
   const invalidate = useInvalidateAppData();
+  const checkForUpdates = useCheckForUpdates();
   const { toast } = useToast();
   const timer = useRef<number | undefined>(undefined);
+  const launchTimer = useRef<number | undefined>(undefined);
+  const launchCheckDone = useRef(false);
+  const launchCheck = useRef(checkForUpdates.mutate);
+  launchCheck.current = checkForUpdates.mutate;
 
   const theme = normalizeTheme(status.data?.settings.theme ?? readStoredTheme());
 
   useEffect(() => {
     applyTheme(theme);
   }, [theme]);
+
+  // Check once after the first status load. The ref guard keeps later query
+  // refreshes from re-running the network request, and the preference can be
+  // disabled without affecting the manual "Check now" action in Settings.
+  useEffect(() => {
+    if (launchCheckDone.current || !status.data) return;
+    launchCheckDone.current = true;
+    if (!status.data.settings.checkForUpdates) return;
+    launchTimer.current = window.setTimeout(() => launchCheck.current(), 1_200);
+  }, [status.data]);
+
+  useEffect(() => {
+    return () => window.clearTimeout(launchTimer.current);
+  }, []);
 
   useEffect(() => {
     const scheduleInvalidate = () => {
@@ -117,6 +137,7 @@ function Shell() {
       <Sidebar />
       <div className="flex min-w-0 flex-1 flex-col">
         <Topbar title={title} />
+        <UpdateCenter />
         <main key={route.path} className="animate-fade-up min-h-0 flex-1 overflow-y-auto">
           <div className="mx-auto w-full max-w-[1240px] px-7 py-7">{page}</div>
         </main>
