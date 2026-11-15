@@ -12,4 +12,6 @@ export interface Settings {
     "theme": string;
     "checkForUpdates": boolean;
     "recentProjects": string[] | null;
+    "runnerMode": string;
+    "wslDistro": string;
 }

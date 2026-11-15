@@ -37,15 +37,15 @@ func (s *ToolsService) List() ([]ToolView, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	plugins, err := s.rt.PluginNames(ctx, homeDir())
+	plugins, err := s.rt.PluginNames(ctx, s.rt.HomeDir())
 	if err != nil {
 		return nil, err
 	}
-	installed, err := s.rt.Tools(ctx, homeDir())
+	installed, err := s.rt.Tools(ctx, s.rt.HomeDir())
 	if err != nil {
 		return nil, err
 	}
-	current, _ := s.rt.Current(ctx, homeDir())
+	current, _ := s.rt.Current(ctx, s.rt.HomeDir())
 
 	installedMap := map[string][]string{}
 	for _, tool := range installed {
@@ -142,7 +142,7 @@ func (s *ToolsService) Install(tool, version string) (ops.Operation, error) {
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "install",
 		Title: fmt.Sprintf("Install %s %s", tool, version),
-		Dir:   homeDir(),
+		Dir:   s.rt.HomeDir(),
 		Args:  args,
 	})
 }
@@ -178,7 +178,7 @@ func (s *ToolsService) Uninstall(tool, version string) (ops.Operation, error) {
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "uninstall",
 		Title: fmt.Sprintf("Uninstall %s %s", tool, version),
-		Dir:   homeDir(),
+		Dir:   s.rt.HomeDir(),
 		Args:  args,
 	})
 }
@@ -203,7 +203,7 @@ func (s *ToolsService) SetVersion(tool string, versions []string, scope, dir str
 
 	args := []string{"set"}
 	title := fmt.Sprintf("Set %s to %s (global)", tool, strings.Join(versions, ", "))
-	workDir := homeDir()
+	workDir := s.rt.HomeDir()
 	switch scope {
 	case "global":
 		args = append(args, "-u")
@@ -236,7 +236,7 @@ func (s *ToolsService) setMiseVersion(tool string, versions []string, scope, dir
 	}
 	args := []string{"use"}
 	title := fmt.Sprintf("Set %s to %s (global)", tool, strings.Join(versions, ", "))
-	workDir := homeDir()
+	workDir := s.rt.HomeDir()
 	switch scope {
 	case "global":
 		args = append(args, "--global")
@@ -246,7 +246,7 @@ func (s *ToolsService) setMiseVersion(tool string, versions []string, scope, dir
 			return ops.Operation{}, err
 		}
 		workDir = validDir
-		target := asdf.MiseWriteTarget(validDir)
+		target := s.rt.RunnerPath(asdf.MiseWriteTarget(validDir))
 		args = append(args, "--path", target)
 		title = fmt.Sprintf("Set %s to %s (local)", tool, strings.Join(versions, ", "))
 	default:
@@ -265,7 +265,7 @@ func (s *ToolsService) validProjectDir(dir string) (string, error) {
 	if strings.TrimSpace(dir) == "" {
 		return "", fmt.Errorf("choose a project directory first")
 	}
-	abs, err := filepath.Abs(expandHome(dir))
+	abs, err := filepath.Abs(s.rt.ResolvePath(dir))
 	if err != nil {
 		return "", err
 	}

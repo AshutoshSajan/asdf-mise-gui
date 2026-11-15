@@ -131,7 +131,7 @@ func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 
 func (s *ProjectService) openASDF(resolved string, view *ProjectView) {
 	view.ConfigFormat = "tool-versions"
-	view.GlobalFilePath = filepath.Join(homeDir(), asdf.ToolVersionsFilename)
+	view.GlobalFilePath = filepath.Join(s.rt.HomeDir(), asdf.ToolVersionsFilename)
 
 	ownPath := filepath.Join(resolved, asdf.ToolVersionsFilename)
 	ownFile, err := asdf.ReadToolVersions(ownPath)
@@ -170,7 +170,11 @@ func (s *ProjectService) openASDF(resolved string, view *ProjectView) {
 
 func (s *ProjectService) openMise(ctx context.Context, resolved string, view *ProjectView) {
 	view.ConfigFormat = "toml"
-	view.GlobalFilePath = asdf.MiseGlobalConfigPath()
+	if configDir := s.rt.Detection().ConfigDir; configDir != "" {
+		view.GlobalFilePath = filepath.Join(configDir, "config.toml")
+	} else {
+		view.GlobalFilePath = asdf.MiseGlobalConfigPath()
+	}
 
 	localPath, localFound := asdf.MiseLocalConfigPath(resolved)
 	effectivePath, effectiveFound := asdf.MiseEffectiveConfigPath(resolved)
@@ -276,16 +280,19 @@ func (s *ProjectService) saveMiseTOML(resolved, target string, entries []asdf.To
 	for index := range entries {
 		desired[entries[index].Tool] = &entries[index]
 	}
+	// `mise use --path` receives the path inside the runner, not the host's
+	// UNC path, so translate it for WSL before building the arguments.
+	cliTarget := s.rt.RunnerPath(target)
 
 	var steps []ops.Step
 	for _, existing := range current {
 		if _, keep := desired[existing.Tool]; keep {
 			continue
 		}
-		steps = append(steps, ops.Step{Args: []string{"use", "--path", target, "--remove", existing.Tool}})
+		steps = append(steps, ops.Step{Args: []string{"use", "--path", cliTarget, "--remove", existing.Tool}})
 	}
 	if len(entries) > 0 {
-		args := []string{"use", "--path", target}
+		args := []string{"use", "--path", cliTarget}
 		for _, entry := range entries {
 			for _, version := range entry.Versions {
 				args = append(args, entry.Tool+"@"+version)
@@ -413,6 +420,12 @@ func (s *ProjectService) resolveDir(dir string) (string, error) {
 	if dir == "" {
 		dir = strings.TrimSpace(s.rt.Settings().DefaultProjectDir)
 	}
+	detection := s.rt.Detection()
+	// WSL has its own home directory; default there instead of the Windows
+	// profile so the app opens the distribution's projects.
+	if dir == "" && detection.RunnerMode == asdf.RunnerWSL && detection.WSLHome != "" {
+		dir = detection.WSLHome
+	}
 	if dir == "" {
 		if cwd, err := os.Getwd(); err == nil {
 			dir = cwd
@@ -421,7 +434,8 @@ func (s *ProjectService) resolveDir(dir string) (string, error) {
 	if dir == "" {
 		dir = homeDir()
 	}
-	abs, err := filepath.Abs(expandHome(dir))
+	dir = s.rt.ResolvePath(dir)
+	abs, err := filepath.Abs(dir)
 	if err != nil {
 		return "", err
 	}

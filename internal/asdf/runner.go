@@ -76,7 +76,12 @@ func (r *LocalRunner) Run(ctx context.Context, dir string, extraEnv []string, st
 	cmd.Dir = dir
 	cmd.Env = append(BuildEnvForEngine(r.engine, r.binaryPath, r.dataDir), extraEnv...)
 	configureProcessGroup(cmd)
+	return runStreamingCommand(ctx, cmd, r.engine, result, stream)
+}
 
+// runStreamingCommand executes a prepared command, streams both pipes, and
+// captures bounded output. It is shared by the local and WSL runners.
+func runStreamingCommand(ctx context.Context, cmd *exec.Cmd, engine string, result Result, stream StreamFunc) (Result, error) {
 	stdout, err := cmd.StdoutPipe()
 	if err != nil {
 		return result, fmt.Errorf("open stdout: %w", err)
@@ -90,7 +95,7 @@ func (r *LocalRunner) Run(ctx context.Context, dir string, extraEnv []string, st
 	stderrBuf := &limitedBuffer{limit: captureLimit}
 
 	if err := cmd.Start(); err != nil {
-		return result, fmt.Errorf("start asdf: %w", err)
+		return result, fmt.Errorf("start %s: %w", engine, err)
 	}
 
 	var wg sync.WaitGroup
@@ -118,7 +123,7 @@ func (r *LocalRunner) Run(ctx context.Context, dir string, extraEnv []string, st
 		if result.ExitCode < 0 {
 			result.ExitCode = 1
 		}
-		return result, &ExitError{Result: result, Err: waitErr, Label: r.engine}
+		return result, &ExitError{Result: result, Err: waitErr, Label: engine}
 	}
 	return result, nil
 }

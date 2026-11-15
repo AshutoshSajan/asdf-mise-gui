@@ -4,8 +4,8 @@ package core
 
 import (
 	"context"
-	"errors"
 	"os"
+	pathpkg "path"
 	"strings"
 	"sync"
 	"time"
@@ -53,7 +53,7 @@ func New() (*Runtime, error) {
 
 	r := &Runtime{store: store}
 	appSettings := store.Get()
-	r.detection = asdf.DetectEngine(appSettings.Engine, appSettings.BinaryPath, appSettings.DataDir)
+	r.detection = asdf.DetectEngineWithOptions(detectOptions(appSettings))
 	r.queue = ops.NewQueue(r.runnerFactory, logDir)
 	r.queue.SetOnChange(func() {
 		if r.onEvent != nil {
@@ -94,7 +94,7 @@ func (r *Runtime) SaveSettings(next settings.Settings) (asdf.Detection, error) {
 // Refresh re-runs discovery and returns the new state.
 func (r *Runtime) Refresh() asdf.Detection {
 	current := r.store.Get()
-	detection := asdf.DetectEngine(current.Engine, current.BinaryPath, current.DataDir)
+	detection := asdf.DetectEngineWithOptions(detectOptions(current))
 
 	r.mu.Lock()
 	r.detection = detection
@@ -140,29 +140,95 @@ func (r *Runtime) Engine() string {
 // IsMise reports whether the app is driving mise.
 func (r *Runtime) IsMise() bool { return r.Engine() == asdf.EngineMise }
 
+func detectOptions(appSettings settings.Settings) asdf.DetectOptions {
+	return asdf.DetectOptions{
+		Engine:          appSettings.Engine,
+		BinaryOverride:  appSettings.BinaryPath,
+		DataDirOverride: appSettings.DataDir,
+		RunnerMode:      appSettings.RunnerMode,
+		WSLDistro:       appSettings.WSLDistro,
+	}
+}
+
+// HomeDir is the host-visible home directory for the active runner. WSL
+// projects expose the Linux home through \\wsl.localhost, so global config
+// files remain editable from the Windows app.
+func (r *Runtime) HomeDir() string {
+	if home := r.Detection().HomeDir; home != "" {
+		return home
+	}
+	return homeDir()
+}
+
+// RunnerMode reports "native" or "wsl" for the active runner.
+func (r *Runtime) RunnerMode() string {
+	mode := r.Detection().RunnerMode
+	if mode == asdf.RunnerWSL {
+		return asdf.RunnerWSL
+	}
+	return asdf.RunnerNative
+}
+
+// HostPath maps a path typed in the runner's native format to a path the host
+// file APIs can open. Native runners pass paths through; WSL runners map Linux
+// paths through the distribution's UNC share.
+func (r *Runtime) HostPath(path string) (string, error) {
+	detection := r.Detection()
+	if detection.RunnerMode != asdf.RunnerWSL {
+		return path, nil
+	}
+	if strings.HasPrefix(strings.TrimSpace(path), "/") {
+		return asdf.WSLHostPath(detection.WSLDistro, path), nil
+	}
+	return path, nil
+}
+
+// ResolvePath expands "~" against the active runner's home, then maps the
+// result to a path the host file APIs can open. Native runners behave like
+// expandHome; WSL runners resolve "~" inside the distribution before exposing
+// the file through \\wsl.localhost.
+func (r *Runtime) ResolvePath(path string) string {
+	detection := r.Detection()
+	path = strings.TrimSpace(path)
+	if detection.RunnerMode == asdf.RunnerWSL && detection.WSLHome != "" {
+		switch {
+		case path == "~":
+			path = detection.WSLHome
+		case strings.HasPrefix(path, "~/"):
+			path = pathpkg.Join(detection.WSLHome, strings.TrimPrefix(path, "~/"))
+		}
+	}
+	if mapped, err := r.HostPath(path); err == nil {
+		return mapped
+	}
+	return path
+}
+
+// RunnerPath converts a host path back to the format the active runner
+// accepts on the command line. It is used for CLI flags such as
+// `mise use --path`, which do not pass through the runner's working-directory
+// translation.
+func (r *Runtime) RunnerPath(hostPath string) string {
+	if r.Detection().RunnerMode != asdf.RunnerWSL {
+		return hostPath
+	}
+	linux, err := asdf.WSLPathFromHost(hostPath)
+	if err != nil {
+		return hostPath
+	}
+	return linux
+}
+
 func (r *Runtime) runnerFactory() (asdf.Runner, error) {
 	detection := r.EnsureDetection()
-	if !detection.Found {
-		message := detection.Error
-		if message == "" {
-			message = "the version manager is not available"
-		}
-		return nil, errors.New(message)
-	}
-	return asdf.NewLocalRunnerForEngine(detection.Engine, detection.BinaryPath, detection.DataDir), nil
+	return asdf.NewRunnerForDetection(detection)
 }
 
 // Runner returns a runner for the current detection.
 func (r *Runtime) Runner() (asdf.Runner, asdf.Detection, error) {
 	detection := r.EnsureDetection()
-	if !detection.Found {
-		message := detection.Error
-		if message == "" {
-			message = "the version manager is not available"
-		}
-		return nil, detection, errors.New(message)
-	}
-	return asdf.NewLocalRunnerForEngine(detection.Engine, detection.BinaryPath, detection.DataDir), detection, nil
+	runner, err := asdf.NewRunnerForDetection(detection)
+	return runner, detection, err
 }
 
 // Run executes a short read-only asdf command.

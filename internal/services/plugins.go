@@ -25,7 +25,7 @@ func NewPluginsService(rt *core.Runtime) *PluginsService {
 func (s *PluginsService) List() ([]asdf.Plugin, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	return s.rt.Plugins(ctx, homeDir())
+	return s.rt.Plugins(ctx, s.rt.HomeDir())
 }
 
 func (s *PluginsService) Available() ([]asdf.AvailablePlugin, error) {
@@ -56,7 +56,7 @@ func (s *PluginsService) Add(name, url string) (ops.Operation, error) {
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "plugin-add",
 		Title: fmt.Sprintf("Add plugin %s", name),
-		Dir:   homeDir(),
+		Dir:   s.rt.HomeDir(),
 		Args:  args,
 	})
 }
@@ -72,7 +72,7 @@ func (s *PluginsService) Remove(name string) (ops.Operation, error) {
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "plugin-remove",
 		Title: fmt.Sprintf("Remove plugin %s", name),
-		Dir:   homeDir(),
+		Dir:   s.rt.HomeDir(),
 		Args:  args,
 	})
 }
@@ -93,7 +93,7 @@ func (s *PluginsService) Update(name string) (ops.Operation, error) {
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "plugin-update",
 		Title: title,
-		Dir:   homeDir(),
+		Dir:   s.rt.HomeDir(),
 		Args:  args,
 	})
 }
