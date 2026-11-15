@@ -6,9 +6,9 @@ import (
 	"path/filepath"
 	"strings"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/settings"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -49,6 +49,14 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 	next.DataDir = strings.TrimSpace(expandHome(next.DataDir))
 	next.DefaultProjectDir = strings.TrimSpace(expandHome(next.DefaultProjectDir))
 
+	switch next.Engine {
+	case "auto", "asdf", "mise":
+	case "":
+		next.Engine = "auto"
+	default:
+		return s.Get(), fmt.Errorf("invalid engine %q: choose auto, asdf, or mise", next.Engine)
+	}
+
 	switch next.Theme {
 	case "system", "light", "dark":
 	default:
@@ -63,14 +71,14 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 		next.BinaryPath = abs
 		info, err := os.Stat(abs)
 		if err != nil {
-			return s.Get(), fmt.Errorf("asdf binary not found: %s", abs)
+			return s.Get(), fmt.Errorf("version manager binary not found: %s", abs)
 		}
 		if info.IsDir() || info.Mode()&0o111 == 0 {
 			return s.Get(), fmt.Errorf("%s is not an executable file", abs)
 		}
-		probe := asdf.Detect(abs, next.DataDir)
+		probe := asdf.DetectEngine(next.Engine, abs, next.DataDir)
 		if !probe.Found {
-			return s.Get(), fmt.Errorf("that binary is not a working asdf: %s", probe.Error)
+			return s.Get(), fmt.Errorf("that binary is not a working version manager: %s", probe.Error)
 		}
 	}
 
@@ -108,6 +116,7 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 
 func (s *SettingsService) Reset() (SettingsView, error) {
 	next := s.rt.Settings()
+	next.Engine = "auto"
 	next.BinaryPath = ""
 	next.DataDir = ""
 	next.DefaultProjectDir = ""
@@ -117,27 +126,27 @@ func (s *SettingsService) Reset() (SettingsView, error) {
 	return s.Get(), nil
 }
 
-// PickBinary opens the native file picker for an asdf binary.
+// PickBinary opens the native file picker for a version manager binary.
 func (s *SettingsService) PickBinary() (string, error) {
 	app := application.Get()
 	if app == nil {
 		return "", fmt.Errorf("application is not ready")
 	}
 	return app.Dialog.OpenFile().
-		SetTitle("Choose the asdf binary").
+		SetTitle("Choose the asdf or mise binary").
 		CanChooseDirectories(false).
 		CanChooseFiles(true).
 		PromptForSingleSelection()
 }
 
-// PickDataDir opens the native folder picker for ASDF_DATA_DIR.
+// PickDataDir opens the native folder picker for the engine data directory.
 func (s *SettingsService) PickDataDir() (string, error) {
 	app := application.Get()
 	if app == nil {
 		return "", fmt.Errorf("application is not ready")
 	}
 	return app.Dialog.OpenFile().
-		SetTitle("Choose the asdf data directory").
+		SetTitle("Choose the version manager data directory").
 		CanChooseDirectories(true).
 		CanChooseFiles(false).
 		CanCreateDirectories(true).

@@ -5,13 +5,13 @@
 !include "FileFunc.nsh"
 
 !ifndef INFO_PROJECTNAME
-    !define INFO_PROJECTNAME "asdf-gui"
+    !define INFO_PROJECTNAME "asdf-mise-gui"
 !endif
 !ifndef INFO_COMPANYNAME
     !define INFO_COMPANYNAME "Ashutosh Sajan"
 !endif
 !ifndef INFO_PRODUCTNAME
-    !define INFO_PRODUCTNAME "asdf-gui"
+    !define INFO_PRODUCTNAME "asdf-mise-gui"
 !endif
 !ifndef INFO_PRODUCTVERSION
     !define INFO_PRODUCTVERSION "0.1.0"

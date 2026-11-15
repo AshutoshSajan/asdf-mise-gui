@@ -4,9 +4,9 @@ import (
 	"fmt"
 	"os"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/ops"
-	"github.com/AshutoshSajan/asdf-gui/internal/settings"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/ops"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/settings"
 )
 
 // OperationService exposes the FIFO queue to the UI.

@@ -5,9 +5,9 @@ import (
 	"log"
 	"log/slog"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/ops"
-	"github.com/AshutoshSajan/asdf-gui/internal/services"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/ops"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/services"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -31,7 +31,7 @@ func init() {
 func main() {
 	runtime, err := core.New()
 	if err != nil {
-		log.Fatalf("asdf-gui: initialise runtime: %v", err)
+		log.Fatalf("asdf-mise-gui: initialise runtime: %v", err)
 	}
 	defer runtime.Close()
 
@@ -43,8 +43,8 @@ func main() {
 	settingsService := services.NewSettingsService(runtime)
 
 	app := application.New(application.Options{
-		Name:        "asdf-gui",
-		Description: "A desktop GUI for the asdf version manager",
+		Name:        "asdf-mise-gui",
+		Description: "A desktop GUI for asdf and mise",
 		LogLevel:    slog.LevelInfo,
 		Services: []application.Service{
 			application.NewService(managerService),
@@ -70,7 +70,7 @@ func main() {
 	})
 
 	app.Window.NewWithOptions(application.WebviewWindowOptions{
-		Title:            "asdf GUI",
+		Title:            "asdf mise GUI",
 		Width:            1280,
 		Height:           840,
 		MinWidth:         980,
@@ -85,6 +85,6 @@ func main() {
 	})
 
 	if err := app.Run(); err != nil {
-		log.Fatalf("asdf-gui: %v", err)
+		log.Fatalf("asdf-mise-gui: %v", err)
 	}
 }

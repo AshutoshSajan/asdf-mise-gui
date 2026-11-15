@@ -5,6 +5,7 @@
  * Settings are user-controlled overrides. Empty values mean "auto-detect".
  */
 export interface Settings {
+    "engine": string;
     "binaryPath": string;
     "dataDir": string;
     "defaultProjectDir": string;

@@ -1,12 +1,13 @@
 <div align="center">
-  <img src="./docs/assets/banner.svg" alt="asdf GUI — Every version. One window." width="100%" />
+  <img src="./docs/assets/banner.svg" alt="asdf mise GUI — Every version. One window." width="100%" />
 </div>
 
-<h1 align="center">asdf GUI</h1>
+<h1 align="center">asdf mise GUI</h1>
 
 <p align="center">
-  <strong>The version manager you already trust, with a face you can click.</strong><br/>
-  A native desktop console for <a href="https://asdf-vm.com">asdf</a> — discover toolchains,<br/>
+  <strong>The version managers you already trust, with a face you can click.</strong><br/>
+  A native desktop console for <a href="https://asdf-vm.com">asdf</a> and
+  <a href="https://mise.jdx.dev/">mise</a> — discover toolchains,<br/>
   pin project versions, and watch every operation stream by.
 </p>
 
@@ -30,7 +31,7 @@
 
 <p align="center">
   <a href="https://wails.io"><img alt="Wails v3.1" src="https://img.shields.io/badge/Wails-v3.1-DF0000?style=flat-square" /></a>
-  <img alt="Go 1.26+" src="https://img.shields.io/badge/Go-1.26%2B-00ADD8?style=flat-square&logo=go&logoColor=white" />
+  <img alt="Go 1.27.4+" src="https://img.shields.io/badge/Go-1.27.4%2B-00ADD8?style=flat-square&logo=go&logoColor=white" />
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=0B0D0C" />
   <img alt="TypeScript 7" src="https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" />
@@ -41,20 +42,21 @@
 
 ---
 
-> **The short version.** asdf is excellent at what it does. Remembering the exact incantation for every plugin is less excellent. asdf GUI gives the version manager a proper desktop home: installed versions, missing versions, plugin management, project pinning, and live command output — without replacing the engine underneath.
+> **The short version.** asdf and mise are excellent at what they do. Remembering the exact incantation for every plugin is less excellent. asdf mise GUI gives both version managers a proper desktop home: installed versions, missing versions, plugin management, project pinning, and live command output — without replacing the engine underneath.
 
 > [!IMPORTANT]
-> **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf CLI through typed Wails services. Linux AppImages are built automatically from version tags. Expect breaking changes before 1.0. macOS and Linux are supported. Native Windows is not supported in v1 — use the Linux build inside WSL2.
+> **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf or mise CLI through typed Wails services. Linux AppImages are built automatically from version tags. Expect breaking changes before 1.0. macOS and Linux are supported. Native Windows is not supported in v1 — use the Linux build inside WSL2.
 
 ## Screenshots
 
 Every screen below is real data from the running app. Click an image to open
-the full-size capture.
+the full-size capture. The screenshots show the pre-rename name; the UI now
+reads **asdf mise GUI**.
 
 <table>
   <tr>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/dashboard.png"><img src="./docs/assets/screenshots/dashboard.png" alt="Dashboard with asdf engine status, plugin and version counts, active project pins, and recent operations" width="100%" /></a>
+      <a href="./docs/assets/screenshots/dashboard.png"><img src="./docs/assets/screenshots/dashboard.png" alt="Dashboard with engine status, plugin and version counts, active project pins, and recent operations" width="100%" /></a>
       <br/>
       <sub><strong>Dashboard</strong> — engine health, toolchain counts, and project state at a glance.</sub>
     </td>
@@ -92,27 +94,28 @@ the full-size capture.
 
 ## Why another version manager UI?
 
-Because asdf already works. This project is a **front-end, not a fork**.
+Because asdf and mise already work. This project is a **front-end, not a fork**.
 
-- **The CLI stays in charge.** Every resolved version, every install, and every shim comes from your real `asdf` binary. There is no second resolution engine to drift out of sync.
-- **No hidden state.** Project pins live in the `.tool-versions` file you already commit. Settings live in a small JSON file. Operation logs live on disk and are one click away.
-- **Mutations are serialized.** asdf installs share a data directory, a plugin checkout, and a shim directory. asdf GUI runs write operations one at a time through a FIFO queue, so two installs can never race each other.
+- **The CLI stays in charge.** Every resolved version, every install, and every shim comes from your real `asdf` or `mise` binary. There is no second resolution engine to drift out of sync.
+- **No hidden state.** Project pins live in the `.tool-versions` or `mise.toml` file you already commit. Settings live in a small JSON file. Operation logs live on disk and are one click away.
+- **Mutations are serialized.** Version managers share a data directory, a plugin checkout, and a shim directory. asdf mise GUI runs write operations one at a time through a FIFO queue, so two installs can never race each other.
 - **The work is visible.** Long installs stream stdout and stderr into the app line by line. Cancel stops the whole process group, not just the parent process.
 - **It stays local.** No telemetry, no accounts, no background daemon, no bundled runtimes.
 
 ## Install
 
 Grab the latest Linux AppImage from the
-[releases page](https://github.com/AshutoshSajan/asdf-gui/releases):
+[releases page](https://github.com/AshutoshSajan/asdf-mise-gui/releases):
 
 ```bash
-chmod +x asdf-gui-*.AppImage
-./asdf-gui-*.AppImage
+chmod +x asdf-mise-gui-*.AppImage
+./asdf-mise-gui-*.AppImage
 ```
 
 The AppImage bundles the application and its GTK4/WebKitGTK 6.0 runtime
 libraries. It still needs [asdf](https://asdf-vm.com/guide/getting-started.html)
-on your `PATH` — the GUI drives your real CLI instead of shipping one.
+or [mise](https://mise.jdx.dev/getting-started.html) on your `PATH` — the GUI
+drives your real CLI instead of shipping one.
 
 <details>
 <summary><strong>AppImage troubleshooting</strong></summary>
@@ -124,7 +127,7 @@ FUSE 3, install `libfuse2` (Debian/Ubuntu) or `fuse2` (Arch), or run the
 AppImage in extract mode:
 
 ```bash
-./asdf-gui-*.AppImage --appimage-extract-and-run
+./asdf-mise-gui-*.AppImage --appimage-extract-and-run
 ```
 
 The release binary is built on Ubuntu 24.04, so it requires glibc `2.39+`.
@@ -138,8 +141,8 @@ Older distributions should build from source against their own GTK stack.
 
 | Requirement | Version | Notes |
 | :-- | :-- | :-- |
-| [asdf](https://asdf-vm.com/guide/getting-started.html) | `0.20.x` tested | asdf GUI drives the CLI; it does not bundle it. |
-| [Go](https://go.dev/dl/) | `1.26+` | Matches `go.mod`. |
+| [asdf](https://asdf-vm.com/guide/getting-started.html) or [mise](https://mise.jdx.dev/getting-started.html) | asdf `0.20.x`, mise `2026.x` tested | The GUI drives the selected engine; it does not bundle one. |
+| [Go](https://go.dev/dl/) | `1.27.4+` | Matches `go.mod`. |
 | [Node.js](https://nodejs.org/) | `22+` | For Vite and the React frontend. |
 | [Wails](https://wails.io) | `v3.1.0` | This project is pinned to Wails v3. |
 | [Task](https://taskfile.dev) | `v3.54+` | Runs the project's build and packaging tasks. |
@@ -203,8 +206,8 @@ task build:gtk3
 ### 2. Run it
 
 ```bash
-git clone https://github.com/AshutoshSajan/asdf-gui.git
-cd asdf-gui
+git clone https://github.com/AshutoshSajan/asdf-mise-gui.git
+cd asdf-mise-gui
 task dev
 ```
 
@@ -226,7 +229,7 @@ task hooks:install
 
 ```bash
 task build
-# → bin/asdf-gui
+# → bin/asdf-mise-gui
 ```
 
 Create installable artifacts with:
@@ -242,30 +245,32 @@ files live under [`build/`](./build).
 
 - **Dashboard** — engine status, plugin and version counts, the active project's
   pinned tools, missing versions, and recent operations in one view.
-- **Tools** — browse every plugin and installed version, see which versions are
-  currently resolved, load the full available version list for a plugin, and
-  install, uninstall, or pin versions without typing a command.
+- **Tools** — browse every tool and installed version, see which versions are
+  currently resolved, load the full available version list, and install,
+  uninstall, or pin versions without typing a command.
 - **Plugins** — inspect installed plugins with their repository URLs and refs,
-  search the asdf plugin registry, add a plugin by name or URL, update one or
+  search the asdf or mise registry, add a plugin by name or URL, update one or
   all plugins, and remove plugins you no longer need.
-- **Projects** — open a directory, read the nearest `.tool-versions` file,
-  understand when a parent file is in effect, edit pinned versions, and install
-  everything the project is missing. Comments, ordering, CRLF line endings, and
-  file permissions survive edits.
+- **Projects** — open a directory, read the nearest `.tool-versions` or mise
+  config file, understand when a parent file is in effect, edit pinned versions,
+  and install everything the project is missing. asdf edits preserve comments,
+  ordering, CRLF line endings, and file permissions; mise TOML saves go through
+  `mise use` so the real parser stays authoritative.
 - **Operations** — every mutation becomes an operation with a status, a live
   output stream, a cancel action, and a persisted log file. The queue shows what
   is running, what is waiting, and what failed.
-- **Settings & diagnostics** — override the asdf binary or `ASDF_DATA_DIR`,
-  choose a default project, follow the system theme or force dark/light, and run
-  environment checks for bash, git, shims, and platform support.
+- **Settings & diagnostics** — choose asdf or mise (or auto-detect), override
+  the binary or `ASDF_DATA_DIR`/`MISE_DATA_DIR`, choose a default project, follow
+  the system theme or force dark/light, and run environment checks for bash,
+  git, shims, and platform support.
 
-### Designed around asdf's real behaviour
+### Designed around real engine behaviour
 
 | Decision | Why |
 | :-- | :-- |
-| Parse CLI output instead of reimplementing resolution | Plugin scripts own version discovery. Guessing would be wrong. |
-| Keep `.tool-versions` as the project source of truth | It is portable, reviewable, and already in your repository. |
-| Serialize installs, uninstalls, sets, and plugin changes | These commands mutate shared asdf state. Concurrency is a bug factory. |
+| Parse CLI output and mise JSON instead of reimplementing resolution | Plugin scripts and mise own version discovery. Guessing would be wrong. |
+| Keep `.tool-versions` and `mise.toml` as the project source of truth | They are portable, reviewable, and already in your repository. |
+| Serialize installs, uninstalls, sets, and plugin changes | These commands mutate shared engine state. Concurrency is a bug factory. |
 | Disable color and terminal interactivity for captured commands | `NO_COLOR=1`, `TERM=dumb`, and disabled git prompts make output predictable. |
 | Stream output in batches | Keeps the UI responsive during large downloads without flooding the bridge. |
 | Keep full logs on disk | The in-memory tail is capped; the log file is the durable record. |
@@ -292,7 +297,7 @@ flowchart TB
         RUNNER["Local runner<br/>argv only · isolated env"]
     end
 
-    ASDF[("asdf CLI")]
+    ENGINE[("asdf or mise CLI")]
     LOGS[("Per-operation logs")]
 
     UI <-->|"calls"| SVC
@@ -301,8 +306,8 @@ flowchart TB
     RT --> QUEUE
     RT --> STORE
     QUEUE --> RUNNER
-    RUNNER -->|"exec"| ASDF
-    ASDF -.->|"stdout / stderr"| QUEUE
+    RUNNER -->|"exec"| ENGINE
+    ENGINE -.->|"stdout / stderr"| QUEUE
     QUEUE --> LOGS
     QUEUE -.->|"batched events"| EVENTS
     EVENTS -.->|"live output"| UI
@@ -316,13 +321,13 @@ sequenceDiagram
     actor You
     participant UI as React UI
     participant Q as Operation queue
-    participant A as asdf CLI
+    participant A as asdf or mise CLI
     participant L as Log file
 
     You->>UI: Install Node.js 22.0.0
     UI->>Q: enqueue(install, nodejs, 22.0.0)
     Q-->>UI: operation:queued
-    Q->>A: asdf install nodejs 22.0.0
+    Q->>A: asdf install nodejs 22.0.0 (or mise install node@22.0.0)
     Q-->>UI: operation:started
     loop While the command runs
         A-->>Q: stdout / stderr
@@ -333,24 +338,25 @@ sequenceDiagram
     UI->>UI: refresh tools, project, and status
 ```
 
-Read-only commands (`list`, `current`, `latest`, `where`, `plugin list`) run
-directly. Every command that can change shared state is queued. Queued operations
+Read-only commands (`list`, `current`, `latest`, `where`, `plugin list`, and
+their mise JSON equivalents) run directly. Every command that can change shared
+state is queued. Queued operations
 can be cancelled before they start; running operations are cancelled by killing
 their process group and then reported as `canceled`.
 
 ## Security model
 
-asdf GUI runs local commands on your behalf, so the boundaries are deliberate:
+asdf mise GUI runs local commands on your behalf, so the boundaries are deliberate:
 
 | Boundary | Design |
 | :-- | :-- |
 | **Shell injection** | Commands are executed as argv arrays with `exec.Command`. No shell is involved. |
-| **Flag injection** | Tool, plugin, and version names starting with `-` are rejected before they reach asdf. |
-| **Path handling** | Project directories are resolved and checked; `.tool-versions` edits stay inside the selected project. |
-| **Concurrent writes** | Mutations run through a single FIFO queue. `.tool-versions` and settings are written atomically. |
+| **Flag injection** | Tool, plugin, and version names starting with `-` are rejected before they reach the engine. |
+| **Path handling** | Project directories are resolved and checked; `.tool-versions` edits stay inside the selected project, and mise writes target that project's config. |
+| **Concurrent writes** | Mutations run through a single FIFO queue. `.tool-versions` and settings are written atomically; mise TOML writes go through `mise use`. |
 | **Interactive prompts** | Git terminal prompts are disabled so plugin operations cannot hang waiting for credentials. |
 | **External links** | Only `http://` and `https://` URLs are opened in the system browser. |
-| **Privacy** | The app has no telemetry and makes no network calls of its own. Network activity comes from asdf and its plugins. |
+| **Privacy** | The app has no telemetry and makes no network calls of its own. Network activity comes from asdf, mise, and their plugins. |
 
 Logs may contain local paths and command output. They stay on your machine.
 
@@ -358,15 +364,19 @@ Logs may contain local paths and command output. They stay on your machine.
 
 | Data | Linux | macOS |
 | :-- | :-- | :-- |
-| Settings | `~/.config/asdf-gui/settings.json` | `~/Library/Application Support/asdf-gui/settings.json` |
-| Operation logs | `~/.cache/asdf-gui/logs/` | `~/Library/Caches/asdf-gui/logs/` |
+| Settings | `~/.config/asdf-mise-gui/settings.json` | `~/Library/Application Support/asdf-mise-gui/settings.json` |
+| Operation logs | `~/.cache/asdf-mise-gui/logs/` | `~/Library/Caches/asdf-mise-gui/logs/` |
 | asdf data | `~/.asdf` or `ASDF_DATA_DIR` | `~/.asdf` or `ASDF_DATA_DIR` |
-| Project pins | `<project>/.tool-versions` | `<project>/.tool-versions` |
-| Global pins | `~/.tool-versions` | `~/.tool-versions` |
+| mise data | `~/.local/share/mise` or `MISE_DATA_DIR` | `~/Library/Application Support/mise` or `MISE_DATA_DIR` |
+| asdf project pins | `<project>/.tool-versions` | `<project>/.tool-versions` |
+| mise project config | `<project>/mise.toml` or `.tool-versions` | `<project>/mise.toml` or `.tool-versions` |
+| asdf global pins | `~/.tool-versions` | `~/.tool-versions` |
+| mise global config | `~/.config/mise/config.toml` | `~/.config/mise/config.toml` |
 
-Settings can point at a custom asdf binary or data directory. The app adds the
-binary's directory to `PATH` and sets `ASDF_DATA_DIR` for every child command, so
-the same installation is used for reads and writes.
+Settings can point at a custom asdf or mise binary and data directory. The app
+adds the binary's directory to `PATH` and sets `ASDF_DATA_DIR` or `MISE_DATA_DIR`
+for every child command, so the same installation is used for reads and writes.
+Existing `asdf-gui` settings are imported once into the new location.
 
 ## Platform support
 
@@ -387,7 +397,7 @@ task dev:gtk3        # hot-reloading desktop app (GTK3 / WebKit2GTK 4.1)
 task build           # production binary in bin/
 task build:gtk3      # production binary against GTK3
 task package         # native packages (platform-dependent)
-task linux:create:appimage   # → bin/asdf-gui-*.AppImage
+task linux:create:appimage   # → bin/asdf-mise-gui-*.AppImage
 
 task test            # backend tests + frontend type-check and build
 task audit           # govulncheck + npm audit
@@ -441,7 +451,7 @@ same report without failing.
 .
 ├── main.go                     # Wails entrypoint, service and event registration
 ├── internal/
-│   ├── asdf/                   # detection, runner, parsers, .tool-versions editor
+│   ├── asdf/                   # asdf/mise detection, runner, parsers, config editors
 │   ├── core/                   # shared runtime, caching, runner factory
 │   ├── ops/                    # FIFO queue, streamed events, cancellation, logs
 │   ├── services/               # typed Wails services consumed by the UI
@@ -481,20 +491,23 @@ AppImage attached.
 ## Troubleshooting
 
 <details>
-<summary><strong>asdf was not found</strong></summary>
+<summary><strong>asdf or mise was not found</strong></summary>
 
 <br/>
 
-Check that the CLI works in a terminal:
+Check that the selected CLI works in a terminal:
 
 ```bash
 asdf --version
 which asdf
+mise --version
+which mise
 ```
 
-asdf GUI searches `PATH`, `~/.asdf/bin`, `~/.local/bin`, Homebrew locations, and
-`/usr/local/bin`. If your installation lives elsewhere, open **Settings → asdf
-binary** and select it, or set the path in `settings.json`.
+asdf mise GUI searches `PATH`, `~/.asdf/bin`, `~/.local/bin`, `~/.local/share/mise`,
+Homebrew locations, and `/usr/local/bin`. If your installation lives elsewhere,
+open **Settings → Engine**, choose the engine, and select its binary, or set the
+path in `settings.json`.
 
 </details>
 
@@ -518,7 +531,7 @@ task dev:gtk3
 
 <br/>
 
-asdf GUI runs commands with `GIT_TERMINAL_PROMPT=0` and `GIT_ASKPASS=true` so a
+asdf mise GUI runs commands with `GIT_TERMINAL_PROMPT=0` and `GIT_ASKPASS=true` so a
 missing credential fails instead of waiting forever. Configure credential
 helpers, SSH keys, or tokens in your normal Git environment before installing
 private plugins.
@@ -531,8 +544,26 @@ private plugins.
 <br/>
 
 Open the project screen and choose **Install missing**, or run the install from
-the tools screen. The project view compares `.tool-versions` entries with
-`asdf current`; an entry can be pinned but not installed yet.
+the tools screen. The project view compares config entries with the engine's
+current resolution; an entry can be pinned but not installed yet.
+
+</details>
+
+<details>
+<summary><strong>mise refuses to read a project config</strong></summary>
+
+<br/>
+
+mise only loads config files it trusts. If the project screen reports
+`Config files ... are not trusted`, review the file and trust it once from a
+terminal:
+
+```bash
+cd /path/to/project
+mise trust
+```
+
+Trust is mise's security boundary, so asdf mise GUI does not bypass it.
 
 </details>
 
@@ -549,7 +580,7 @@ Windows 11's WSLg provides the display and audio integration.
 
 ## Non-goals
 
-- Replacing asdf's version resolution with a second implementation.
+- Replacing asdf or mise version resolution with a second implementation.
 - Bundling language runtimes or hiding plugin scripts.
 - Shipping native Windows artifacts in v1.
 - Sending usage data or requiring an account.
@@ -557,6 +588,8 @@ Windows 11's WSLg provides the display and audio integration.
 ## Roadmap
 
 - [x] asdf discovery and validation with manual overrides
+- [x] mise discovery, JSON parsing, config editing, and `mise use` pinning
+- [x] Auto/asdf/mise engine selection with per-engine settings
 - [x] Serialized operation queue with streamed output, cancellation, and log files
 - [x] Comment-preserving `.tool-versions` editing with atomic writes
 - [x] Typed Wails services and generated TypeScript bindings
@@ -572,7 +605,7 @@ Windows 11's WSLg provides the display and audio integration.
 
 Contributions are welcome. Before opening a pull request:
 
-1. Keep asdf as the source of truth — do not reimplement version resolution.
+1. Keep the selected engine as the source of truth — do not reimplement version resolution.
 2. Run `task test` (backend tests plus a frontend type-check/build) and
    `task audit`.
 3. Install the hooks with `task hooks:install` so dependency freshness is
@@ -590,6 +623,6 @@ MIT © [Ashutosh Sajan](https://github.com/AshutoshSajan). See [`LICENSE`](./LIC
 ---
 
 <p align="center">
-  <sub>asdf GUI is an independent project. It is not affiliated with the asdf maintainers.</sub><br/>
+  <sub>asdf mise GUI is an independent project. It is not affiliated with the asdf or mise maintainers.</sub><br/>
   <sub>Built with Go, <a href="https://wails.io">Wails v3</a>, React, and a healthy respect for the command line.</sub>
 </p>

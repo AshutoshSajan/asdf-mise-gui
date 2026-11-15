@@ -10,9 +10,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/settings"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/settings"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
@@ -26,20 +26,21 @@ func NewManagerService(rt *core.Runtime) *ManagerService {
 }
 
 type Status struct {
-	Detection      asdf.Detection    `json:"detection"`
-	Settings       settings.Settings `json:"settings"`
-	OS             string            `json:"os"`
-	Arch           string            `json:"arch"`
-	Environment    string            `json:"environment"`
-	WSL            bool              `json:"wsl"`
-	PluginCount    int               `json:"pluginCount"`
-	ToolCount      int               `json:"toolCount"`
-	VersionCount   int               `json:"versionCount"`
-	LogsDir        string            `json:"logsDir"`
-	SettingsPath   string            `json:"settingsPath"`
-	AsdfConfigFile string            `json:"asdfConfigFile"`
-	NeedsSetup     bool              `json:"needsSetup"`
-	QueuePending   int               `json:"queuePending"`
+	Detection    asdf.Detection    `json:"detection"`
+	Settings     settings.Settings `json:"settings"`
+	Engine       string            `json:"engine"`
+	OS           string            `json:"os"`
+	Arch         string            `json:"arch"`
+	Environment  string            `json:"environment"`
+	WSL          bool              `json:"wsl"`
+	PluginCount  int               `json:"pluginCount"`
+	ToolCount    int               `json:"toolCount"`
+	VersionCount int               `json:"versionCount"`
+	LogsDir      string            `json:"logsDir"`
+	SettingsPath string            `json:"settingsPath"`
+	ConfigFile   string            `json:"configFile"`
+	NeedsSetup   bool              `json:"needsSetup"`
+	QueuePending int               `json:"queuePending"`
 }
 
 func (s *ManagerService) Status(refresh bool) Status {
@@ -51,18 +52,23 @@ func (s *ManagerService) Status(refresh bool) Status {
 	env, wsl := environment()
 	logsDir, _ := settings.LogsDir()
 
+	configFile := filepath.Join(homeDir(), ".asdfrc")
+	if detection.Engine == asdf.EngineMise {
+		configFile = asdf.MiseGlobalConfigPath()
+	}
 	status := Status{
-		Detection:      detection,
-		Settings:       appSettings,
-		OS:             runtime.GOOS,
-		Arch:           runtime.GOARCH,
-		Environment:    env,
-		WSL:            wsl,
-		LogsDir:        logsDir,
-		SettingsPath:   s.rt.SettingsStore().Path(),
-		AsdfConfigFile: filepath.Join(homeDir(), ".asdfrc"),
-		NeedsSetup:     !detection.Found,
-		QueuePending:   s.rt.Queue().RunningCount(),
+		Detection:    detection,
+		Settings:     appSettings,
+		Engine:       s.rt.Engine(),
+		OS:           runtime.GOOS,
+		Arch:         runtime.GOARCH,
+		Environment:  env,
+		WSL:          wsl,
+		LogsDir:      logsDir,
+		SettingsPath: s.rt.SettingsStore().Path(),
+		ConfigFile:   configFile,
+		NeedsSetup:   !detection.Found,
+		QueuePending: s.rt.Queue().RunningCount(),
 	}
 	if detection.Found {
 		plugins := s.readPlugins()
@@ -79,21 +85,21 @@ func (s *ManagerService) Status(refresh bool) Status {
 func (s *ManagerService) readPlugins() []asdf.Plugin {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, "", "plugin", "list", "--urls", "--refs")
+	plugins, err := s.rt.Plugins(ctx, homeDir())
 	if err != nil {
 		return nil
 	}
-	return asdf.ParsePluginList(result.Stdout)
+	return plugins
 }
 
 func (s *ManagerService) readTools() []asdf.ToolVersions {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, "", "list")
+	tools, err := s.rt.Tools(ctx, homeDir())
 	if err != nil {
 		return nil
 	}
-	return asdf.ParseInstalledVersions(result.Stdout)
+	return tools
 }
 
 type Check struct {
@@ -104,11 +110,12 @@ type Check struct {
 
 type Diagnostics struct {
 	Detection    asdf.Detection `json:"detection"`
+	Engine       string         `json:"engine"`
 	Environment  string         `json:"environment"`
 	WSL          bool           `json:"wsl"`
 	OS           string         `json:"os"`
 	Arch         string         `json:"arch"`
-	AsdfInfo     string         `json:"asdfInfo"`
+	EngineInfo   string         `json:"engineInfo"`
 	BashVersion  string         `json:"bashVersion"`
 	GitVersion   string         `json:"gitVersion"`
 	Shell        string         `json:"shell"`
@@ -123,8 +130,10 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 	detection := s.rt.Refresh()
 	env, wsl := environment()
 	logsDir, _ := settings.LogsDir()
+	engine := s.rt.Engine()
 	diag := Diagnostics{
 		Detection:    detection,
+		Engine:       engine,
 		Environment:  env,
 		WSL:          wsl,
 		OS:           runtime.GOOS,
@@ -137,11 +146,13 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 	}
 
 	if detection.Found {
-		ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
-		if result, err := s.rt.Run(ctx, "", "info"); err == nil {
-			diag.AsdfInfo = strings.TrimSpace(result.Stdout)
+		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+		if info, err := s.rt.EngineInfo(ctx, homeDir()); err == nil {
+			diag.EngineInfo = strings.TrimSpace(info)
+		} else if strings.TrimSpace(info) != "" {
+			diag.EngineInfo = strings.TrimSpace(info) + "\n" + err.Error()
 		} else {
-			diag.AsdfInfo = err.Error()
+			diag.EngineInfo = err.Error()
 		}
 		cancel()
 	}
@@ -150,13 +161,13 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 	diag.GitVersion, _ = versionCommand("git", "--version")
 
 	diag.Checks = append(diag.Checks, Check{
-		Name:   "asdf binary",
+		Name:   engine + " binary",
 		Status: boolStatus(detection.Found),
 		Detail: detailOr(detection.BinaryPath, detection.Error),
 	})
 	if detection.Found {
 		diag.Checks = append(diag.Checks, Check{
-			Name:   "asdf version",
+			Name:   engine + " version",
 			Status: "ok",
 			Detail: detailOr(detection.Version, "unknown"),
 		})
@@ -168,11 +179,11 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 			dataDirDetail += " (will be created on first install)"
 			dataDirStatus = "ok"
 		}
-		diag.Checks = append(diag.Checks, Check{Name: "asdf data directory", Status: dataDirStatus, Detail: dataDirDetail})
+		diag.Checks = append(diag.Checks, Check{Name: engine + " data directory", Status: dataDirStatus, Detail: dataDirDetail})
 	}
 
 	bashStatus := "fail"
-	bashDetail := "bash is required by asdf plugins"
+	bashDetail := "bash is required by many version manager plugins"
 	if diag.BashVersion != "" {
 		bashStatus = "ok"
 		bashDetail = firstLine(diag.BashVersion)
@@ -188,11 +199,18 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 	diag.Checks = append(diag.Checks, Check{Name: "git", Status: gitStatus, Detail: gitDetail})
 
 	shimsPath := filepath.Join(homeDir(), ".asdf", "shims")
+	shimsHint := "asdf shims are on PATH"
+	shimsMissing := shimsPath + " is not on PATH; the shell will not see asdf-managed tools"
+	if engine == asdf.EngineMise {
+		shimsPath = filepath.Join(detection.DataDir, "shims")
+		shimsHint = "mise shims are on PATH"
+		shimsMissing = shimsPath + " is not on PATH; run `mise activate` in your shell to see mise-managed tools"
+	}
 	shimsStatus := "warn"
-	shimsDetail := shimsPath + " is not on PATH; the shell will not see asdf-managed tools"
+	shimsDetail := shimsMissing
 	if pathContains(os.Getenv("PATH"), shimsPath) {
 		shimsStatus = "ok"
-		shimsDetail = "asdf shims are on PATH"
+		shimsDetail = shimsHint
 	}
 	diag.Checks = append(diag.Checks, Check{Name: "shell integration", Status: shimsStatus, Detail: shimsDetail})
 

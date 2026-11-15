@@ -47,9 +47,11 @@ export function usePlugins() {
   });
 }
 
-export function usePluginCatalog(enabled = true) {
+export function usePluginCatalog(engine = "auto", enabled = true) {
   return useQuery({
-    queryKey: queryKeys.pluginCatalog,
+    // asdf and mise publish different registries, so the active engine is part
+    // of the cache identity even though the endpoint itself has no arguments.
+    queryKey: [...queryKeys.pluginCatalog, engine],
     queryFn: () => PluginsService.Available(),
     staleTime: 24 * 60 * 60 * 1000,
     enabled,

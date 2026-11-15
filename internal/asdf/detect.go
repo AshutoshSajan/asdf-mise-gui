@@ -12,9 +12,10 @@ import (
 	"time"
 )
 
-// Detection describes the asdf installation the app will drive.
+// Detection describes the version manager the app will drive.
 type Detection struct {
 	Found      bool   `json:"found"`
+	Engine     string `json:"engine"`
 	BinaryPath string `json:"binaryPath"`
 	DataDir    string `json:"dataDir"`
 	Version    string `json:"version"`
@@ -23,14 +24,56 @@ type Detection struct {
 	CheckedAt  string `json:"checkedAt"`
 }
 
+// Engines supported by the GUI.
+const (
+	EngineAuto = "auto"
+	EngineASDF = "asdf"
+	EngineMise = "mise"
+)
+
 var versionPatternCLI = regexp.MustCompile(`(?i)asdf\s+version\s+(v?[0-9]+\.[0-9]+\.[0-9]+[^\s]*)`)
 
-// Detect locates the asdf binary and validates it by running --version.
-// Overrides come from the app settings and take precedence over discovery.
+// Detect locates the asdf binary. It is kept for callers that only care about
+// asdf; DetectEngine is the engine-aware entry point used by the app.
 func Detect(binaryOverride, dataDirOverride string) Detection {
-	d := Detection{CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	return DetectEngine(EngineASDF, binaryOverride, dataDirOverride)
+}
 
-	candidates := candidateBinaries(binaryOverride)
+// DetectEngine locates the selected version manager and validates it by running
+// --version. Overrides come from the app settings and take precedence over
+// discovery. With "auto", asdf wins when both engines are installed so that
+// existing users keep their current setup; mise is the fallback.
+func DetectEngine(engine, binaryOverride, dataDirOverride string) Detection {
+	switch engine {
+	case EngineASDF:
+		return detectASDF(binaryOverride, dataDirOverride)
+	case EngineMise:
+		return detectMise(binaryOverride, dataDirOverride)
+	case "", EngineAuto:
+		asdfDetection := detectASDF(binaryOverride, dataDirOverride)
+		if asdfDetection.Found {
+			return asdfDetection
+		}
+		miseDetection := detectMise(binaryOverride, dataDirOverride)
+		if miseDetection.Found {
+			return miseDetection
+		}
+		asdfDetection.Engine = EngineAuto
+		asdfDetection.Error = fmt.Sprintf("asdf: %s; mise: %s", asdfDetection.Error, miseDetection.Error)
+		return asdfDetection
+	default:
+		return Detection{
+			Engine:    engine,
+			CheckedAt: time.Now().UTC().Format(time.RFC3339),
+			Error:     fmt.Sprintf("unknown engine %q: choose auto, asdf, or mise", engine),
+		}
+	}
+}
+
+func detectASDF(binaryOverride, dataDirOverride string) Detection {
+	d := Detection{Engine: EngineASDF, CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+
+	candidates := candidateBinaries("asdf", binaryOverride)
 	var firstErr string
 	for _, candidate := range candidates {
 		path, err := resolveExecutable(candidate.path)
@@ -50,6 +93,11 @@ func Detect(binaryOverride, dataDirOverride string) Detection {
 		if firstErr != "" {
 			d.Error = firstErr
 		}
+		return d
+	}
+
+	if engineBinaryBase(d.BinaryPath) == EngineMise {
+		d.Error = fmt.Sprintf("%s is a mise binary, not asdf. Set the engine to mise or choose the asdf binary.", d.BinaryPath)
 		return d
 	}
 
@@ -78,10 +126,28 @@ func Detect(binaryOverride, dataDirOverride string) Detection {
 	text := strings.TrimSpace(string(out))
 	d.Version = parseVersionLine(text)
 	if d.Version == "" {
-		d.Version = text
+		d.Error = fmt.Sprintf("%s does not report an asdf version: %q", d.BinaryPath, firstOutputLine(text))
+		return d
 	}
 	d.Found = true
 	return d
+}
+
+// engineBinaryBase returns the binary file name without a Windows extension,
+// lowercased so engine names compare consistently.
+func engineBinaryBase(path string) string {
+	base := strings.ToLower(filepath.Base(path))
+	return strings.TrimSuffix(base, ".exe")
+}
+
+// firstOutputLine keeps detection errors readable when a binary prints a banner
+// before its version (mise prints update warnings on stderr).
+func firstOutputLine(output string) string {
+	line, _, _ := strings.Cut(strings.TrimSpace(output), "\n")
+	if len(line) > 160 {
+		line = line[:160] + "…"
+	}
+	return line
 }
 
 type binaryCandidate struct {
@@ -89,7 +155,7 @@ type binaryCandidate struct {
 	source string
 }
 
-func candidateBinaries(override string) []binaryCandidate {
+func candidateBinaries(name, override string) []binaryCandidate {
 	var out []binaryCandidate
 	seen := map[string]bool{}
 	add := func(path, source string) {
@@ -105,20 +171,24 @@ func candidateBinaries(override string) []binaryCandidate {
 		return out
 	}
 
-	if path, err := exec.LookPath("asdf"); err == nil {
+	if path, err := exec.LookPath(name); err == nil {
 		add(path, "PATH")
 	}
 
 	home := homeDir()
-	add(filepath.Join(home, ".asdf", "bin", "asdf"), "~/.asdf/bin")
-	add(filepath.Join(home, ".local", "bin", "asdf"), "~/.local/bin")
-	if runtime.GOOS == "darwin" {
-		add("/opt/homebrew/bin/asdf", "Homebrew")
-		add("/usr/local/bin/asdf", "Homebrew")
+	add(filepath.Join(home, ".asdf", "bin", name), "~/.asdf/bin")
+	add(filepath.Join(home, ".local", "bin", name), "~/.local/bin")
+	if name == "mise" {
+		add(filepath.Join(home, ".cargo", "bin", name), "~/.cargo/bin")
+		add(filepath.Join(home, ".local", "share", "mise", "bin", name), "~/.local/share/mise/bin")
 	}
-	add("/home/linuxbrew/.linuxbrew/bin/asdf", "Homebrew")
-	add("/usr/local/bin/asdf", "common location")
-	add("/usr/bin/asdf", "common location")
+	if runtime.GOOS == "darwin" {
+		add("/opt/homebrew/bin/"+name, "Homebrew")
+		add("/usr/local/bin/"+name, "Homebrew")
+	}
+	add("/home/linuxbrew/.linuxbrew/bin/"+name, "Homebrew")
+	add("/usr/local/bin/"+name, "common location")
+	add("/usr/bin/"+name, "common location")
 	return out
 }
 
@@ -181,10 +251,19 @@ func parseVersionLine(line string) string {
 	return ""
 }
 
-// BuildEnv returns the environment used for every asdf invocation. GUI apps
-// launched from a desktop environment often do not inherit the user's shell
-// PATH, so the discovered binary directory is prepended explicitly.
+// BuildEnv returns the environment used for every asdf invocation.
 func BuildEnv(binaryPath, dataDir string) []string {
+	return BuildEnvForEngine(EngineASDF, binaryPath, dataDir)
+}
+
+// BuildEnvForEngine returns the environment used for every invocation of the
+// selected version manager. GUI apps launched from a desktop environment often
+// do not inherit the user's shell PATH, so the discovered binary directory is
+// prepended explicitly.
+func BuildEnvForEngine(engine, binaryPath, dataDir string) []string {
+	if engine != EngineMise {
+		engine = EngineASDF
+	}
 	binDir := filepath.Dir(binaryPath)
 
 	base := os.Environ()
@@ -212,9 +291,13 @@ func BuildEnv(binaryPath, dataDir string) []string {
 		currentPath = "/usr/local/bin:/usr/bin:/bin:/usr/sbin:/sbin"
 	}
 	set("PATH", binDir+string(os.PathListSeparator)+currentPath)
-	set("ASDF_DATA_DIR", dataDir)
-	if parent := filepath.Dir(binDir); parent != "" && filepath.Base(binDir) == "bin" {
-		set("ASDF_DIR", parent)
+	if engine == EngineMise {
+		set("MISE_DATA_DIR", dataDir)
+	} else {
+		set("ASDF_DATA_DIR", dataDir)
+		if parent := filepath.Dir(binDir); parent != "" && filepath.Base(binDir) == "bin" {
+			set("ASDF_DIR", parent)
+		}
 	}
 	set("NO_COLOR", "1")
 	set("TERM", "dumb")

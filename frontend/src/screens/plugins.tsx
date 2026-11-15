@@ -1,6 +1,8 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
+  ChevronLeft,
+  ChevronRight,
   ExternalLink,
   GitBranch,
   Package,
@@ -45,6 +47,8 @@ import { navigate } from "../lib/route";
 
 type RemoveTarget = { name: string };
 
+const PAGE_SIZE = 50;
+
 export function Plugins() {
   const status = useStatus();
   const plugins = usePlugins();
@@ -56,6 +60,10 @@ export function Plugins() {
   const [tab, setTab] = useState("installed");
   const [addOpen, setAddOpen] = useState(false);
   const [removeTarget, setRemoveTarget] = useState<RemoveTarget | null>(null);
+
+  const detection = status.data?.detection;
+  const engine = status.data?.engine || detection?.engine || "asdf";
+  const isMise = engine === "mise";
 
   const installed = plugins.data ?? [];
   const rows = useMemo(() => {
@@ -81,7 +89,9 @@ export function Plugins() {
   };
 
   const openDocs = () => {
-    void ManagerService.OpenURL("https://asdf-vm.com/manage-plugins.html");
+    void ManagerService.OpenURL(
+      isMise ? "https://mise.jdx.dev/registry.html" : "https://asdf-vm.com/manage-plugins.html",
+    );
   };
 
   return (
@@ -89,7 +99,9 @@ export function Plugins() {
       <PageHeader
         eyebrow="Registry"
         title="Plugins"
-        description="asdf plugins provide the version list and install recipes for each tool. Add from the official registry or a Git URL."
+        description={`Plugins provide the version list and install recipes for each tool. Add from ${
+          isMise ? "the mise registry" : "the official asdf registry"
+        } or a Git URL.`}
         actions={
           <>
             <Hint label="Reload installed plugins">
@@ -109,12 +121,12 @@ export function Plugins() {
         }
       />
 
-      {!status.data?.detection.found ? (
+      {!detection?.found ? (
         <Card className="border-warn/25 bg-warn/5 p-4">
           <div className="flex items-start gap-3">
             <TriangleAlert className="mt-0.5 size-4 shrink-0 text-warn" />
             <div className="text-[12px] leading-relaxed text-muted">
-              asdf was not detected. Plugin commands will fail until the engine is configured on the{" "}
+              {engine} was not detected. Plugin commands will fail until the engine is configured on the{" "}
               <button className="text-ink underline underline-offset-2" onClick={() => navigate("/settings")}>
                 Settings
               </button>{" "}
@@ -175,7 +187,7 @@ export function Plugins() {
               description={
                 query
                   ? "Try a different name, URL, or ref."
-                  : "add a plugin from the official registry, then install a version from the Tools screen."
+                  : `Add a plugin from ${isMise ? "the mise registry" : "the official asdf registry"}, then install a version from the Tools screen.`
               }
               action={
                 <Button size="sm" onClick={() => (query ? setQuery("") : setAddOpen(true))}>
@@ -211,6 +223,7 @@ export function Plugins() {
             installedNames={installed.map((plugin) => plugin.name)}
             onAdded={refresh}
             onAddManual={() => setAddOpen(true)}
+            isMise={isMise}
           />
         </TabsContent>
       </Tabs>
@@ -233,7 +246,7 @@ export function Plugins() {
           if (!open) setRemoveTarget(null);
         }}
         title={`Remove plugin ${removeTarget?.name ?? ""}?`}
-        description="The plugin clone is deleted from the asdf data directory. Installed tool versions stay on disk, but they are no longer discoverable until a plugin with the same name is added again."
+        description={`The plugin is removed from the ${engine} data directory. Installed tool versions stay on disk, but they are no longer discoverable until a plugin with the same name is added again.`}
         confirmLabel="Remove plugin"
         destructive
         loading={queue.isPending}
@@ -309,15 +322,18 @@ function PluginCatalog({
   installedNames,
   onAdded,
   onAddManual,
+  isMise,
 }: {
   installedNames: string[];
   onAdded: () => void;
   onAddManual: () => void;
+  isMise: boolean;
 }) {
-  const catalog = usePluginCatalog();
+  const catalog = usePluginCatalog(isMise ? "mise" : "asdf");
   const queue = useQueueOperation();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
+  const [page, setPage] = useState(1);
   const [pending, setPending] = useState<string | null>(null);
 
   const installed = useMemo(() => new Set(installedNames), [installedNames]);
@@ -329,6 +345,15 @@ function PluginCatalog({
       (entry) => entry.name.toLowerCase().includes(needle) || entry.url.toLowerCase().includes(needle),
     );
   }, [catalog.data, query]);
+
+  useEffect(() => {
+    setPage(1);
+  }, [query]);
+
+  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
+  const currentPage = Math.min(page, pageCount);
+  const pageStart = (currentPage - 1) * PAGE_SIZE;
+  const pageRows = rows.slice(pageStart, pageStart + PAGE_SIZE);
 
   useEffect(() => {
     if (catalog.isError) {
@@ -380,8 +405,8 @@ function PluginCatalog({
           <div className="min-w-0 flex-1">
             <h3 className="text-[13px] font-medium text-ink">Could not load the plugin registry</h3>
             <p className="mt-1 text-xs leading-relaxed text-muted">
-              The registry is fetched from asdf's plugin index. Check your network connection or add a plugin from a Git
-              URL directly.
+              The registry is fetched from {isMise ? "mise's registry" : "asdf's plugin index"}. Check your network
+              connection or add a plugin from a Git URL directly.
             </p>
             <p className="mt-2 rounded-lg border border-line bg-canvas/50 px-3 py-2 font-mono text-[11px] text-danger">
               {errorMessage(catalog.error)}
@@ -422,7 +447,7 @@ function PluginCatalog({
           description={
             query
               ? "Try a shorter search, or add a plugin by Git URL instead."
-              : "Asdf did not return any registry entries. You can still add a plugin by URL."
+              : `${isMise ? "mise" : "asdf"} did not return any registry entries. You can still add a plugin by URL.`
           }
           action={
             <Button size="sm" variant="secondary" onClick={onAddManual}>
@@ -434,7 +459,7 @@ function PluginCatalog({
       ) : (
         <Card className="overflow-hidden">
           <div className="divide-y divide-line-soft">
-            {rows.slice(0, 250).map((entry) => {
+            {pageRows.map((entry) => {
               const already = installed.has(entry.name);
               return (
                 <div
@@ -473,11 +498,39 @@ function PluginCatalog({
               );
             })}
           </div>
-          {rows.length > 250 ? (
-            <div className="border-t border-line-soft px-4 py-2 text-[11px] text-faint">
-              Showing 250 of {rows.length}. Refine the search to see more.
+          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft px-4 py-2.5">
+            <span className="text-[11px] text-faint">
+              Showing {pageStart + 1}–{pageStart + pageRows.length} of {rows.length}
+              {rows.length !== (catalog.data?.length ?? 0) ? ` (${catalog.data?.length ?? 0} total)` : ""}
+            </span>
+            <div className="flex items-center gap-2">
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                disabled={currentPage <= 1}
+                onClick={() => setPage(currentPage - 1)}
+                aria-label="Previous registry page"
+              >
+                <ChevronLeft className="size-3.5" />
+                Previous
+              </Button>
+              <span className="min-w-24 text-center font-mono text-[10px] text-faint">
+                Page {currentPage} of {pageCount}
+              </span>
+              <Button
+                size="sm"
+                variant="ghost"
+                className="h-7"
+                disabled={currentPage >= pageCount}
+                onClick={() => setPage(currentPage + 1)}
+                aria-label="Next registry page"
+              >
+                Next
+                <ChevronRight className="size-3.5" />
+              </Button>
             </div>
-          ) : null}
+          </div>
         </Card>
       )}
     </div>
@@ -534,7 +587,7 @@ function AddPluginDialog({
             <Input
               value={url}
               onChange={(event) => setUrl(event.target.value)}
-              placeholder="https://github.com/asdf-vm/asdf-nodejs.git"
+              placeholder="https://github.com/org/tool-plugin.git"
               className="font-mono text-[12px]"
             />
             <p className="mt-1.5 text-[11px] leading-relaxed text-faint">

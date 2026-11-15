@@ -38,7 +38,7 @@ export function OperationOutput({
           <div className="flex h-40 flex-col items-center justify-center gap-1.5 text-center">
             <span className="text-faint">No output yet.</span>
             <span className="text-[10px] text-faint/70">
-              {live ? "Lines will appear here as asdf writes them." : "This operation did not write any output."}
+              {live ? "Lines will appear here as the command writes them." : "This operation did not write any output."}
             </span>
           </div>
         ) : (

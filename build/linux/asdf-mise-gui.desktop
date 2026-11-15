@@ -1,0 +1,12 @@
+[Desktop Entry]
+Type=Application
+Name=asdf mise GUI
+Exec=asdf-mise-gui
+Icon=asdf-mise-gui
+Categories=Development;
+Comment=Manage asdf and mise toolchains without leaving your desktop
+Terminal=false
+Keywords=asdf;mise;version;toolchain;development;
+Version=1.0
+GenericName=Version Manager
+StartupNotify=false

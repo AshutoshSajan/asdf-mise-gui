@@ -9,9 +9,9 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/ops"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/ops"
 )
 
 // ToolsService reads installed tools and queues install/uninstall/set actions.
@@ -37,19 +37,15 @@ func (s *ToolsService) List() ([]ToolView, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
-	pluginsResult, err := s.rt.Run(ctx, homeDir(), "plugin", "list")
+	plugins, err := s.rt.PluginNames(ctx, homeDir())
 	if err != nil {
 		return nil, err
 	}
-	listResult, err := s.rt.Run(ctx, homeDir(), "list")
+	installed, err := s.rt.Tools(ctx, homeDir())
 	if err != nil {
 		return nil, err
 	}
-	currentResult, _ := s.rt.Run(ctx, homeDir(), "current", "--no-header")
-
-	plugins := asdf.ParsePluginNames(pluginsResult.Stdout)
-	installed := asdf.ParseInstalledVersions(listResult.Stdout)
-	current := asdf.ParseCurrent(currentResult.Stdout)
+	current, _ := s.rt.Current(ctx, homeDir())
 
 	installedMap := map[string][]string{}
 	for _, tool := range installed {
@@ -107,21 +103,13 @@ func (s *ToolsService) Available(tool string) ([]string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, homeDir(), "list", "all", tool)
-	if err != nil {
-		return nil, err
-	}
-	return asdf.ParseAvailableVersions(result.Stdout), nil
+	return s.rt.AvailableVersions(ctx, tool)
 }
 
 func (s *ToolsService) LatestAll() ([]asdf.LatestVersion, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 90*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, homeDir(), "latest", "--all")
-	if err != nil {
-		return nil, err
-	}
-	return asdf.ParseLatestAll(result.Stdout), nil
+	return s.rt.LatestAll(ctx)
 }
 
 func (s *ToolsService) Where(tool, version string) (string, error) {
@@ -133,11 +121,11 @@ func (s *ToolsService) Where(tool, version string) (string, error) {
 	}
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, homeDir(), "where", tool, version)
+	path, err := s.rt.Where(ctx, tool, version)
 	if err != nil {
 		return "", err
 	}
-	return strings.TrimSpace(result.Stdout), nil
+	return strings.TrimSpace(path), nil
 }
 
 func (s *ToolsService) Install(tool, version string) (ops.Operation, error) {
@@ -147,11 +135,15 @@ func (s *ToolsService) Install(tool, version string) (ops.Operation, error) {
 	if err := asdf.ValidateVersion(version); err != nil {
 		return ops.Operation{}, err
 	}
+	args := []string{"install", tool, version}
+	if s.rt.IsMise() {
+		args = []string{"install", tool + "@" + version}
+	}
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "install",
 		Title: fmt.Sprintf("Install %s %s", tool, version),
 		Dir:   homeDir(),
-		Args:  []string{"install", tool, version},
+		Args:  args,
 	})
 }
 
@@ -160,9 +152,13 @@ func (s *ToolsService) InstallAll(dir string) (ops.Operation, error) {
 	if err != nil {
 		return ops.Operation{}, err
 	}
+	title := "Install tools from .tool-versions"
+	if s.rt.IsMise() {
+		title = "Install tools from mise config"
+	}
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "install-all",
-		Title: "Install tools from .tool-versions",
+		Title: title,
 		Dir:   dir,
 		Args:  []string{"install"},
 	})
@@ -175,16 +171,20 @@ func (s *ToolsService) Uninstall(tool, version string) (ops.Operation, error) {
 	if err := asdf.ValidateVersion(version); err != nil {
 		return ops.Operation{}, err
 	}
+	args := []string{"uninstall", tool, version}
+	if s.rt.IsMise() {
+		args = []string{"uninstall", tool + "@" + version}
+	}
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "uninstall",
 		Title: fmt.Sprintf("Uninstall %s %s", tool, version),
 		Dir:   homeDir(),
-		Args:  []string{"uninstall", tool, version},
+		Args:  args,
 	})
 }
 
-// SetVersion writes a version with `asdf set`, preserving asdf's own parsing
-// and comment handling. scope is "local" or "global".
+// SetVersion writes a version with the engine's own CLI, preserving its
+// parsing and comment handling. scope is "local" or "global".
 func (s *ToolsService) SetVersion(tool string, versions []string, scope, dir string) (ops.Operation, error) {
 	if err := asdf.ValidateName("tool", tool); err != nil {
 		return ops.Operation{}, err
@@ -197,6 +197,10 @@ func (s *ToolsService) SetVersion(tool string, versions []string, scope, dir str
 			return ops.Operation{}, err
 		}
 	}
+	if s.rt.IsMise() {
+		return s.setMiseVersion(tool, versions, scope, dir)
+	}
+
 	args := []string{"set"}
 	title := fmt.Sprintf("Set %s to %s (global)", tool, strings.Join(versions, ", "))
 	workDir := homeDir()
@@ -215,6 +219,40 @@ func (s *ToolsService) SetVersion(tool string, versions []string, scope, dir str
 	}
 	args = append(args, tool)
 	args = append(args, versions...)
+	return s.rt.Queue().Enqueue(ops.Request{
+		Kind:  "set",
+		Title: title,
+		Dir:   workDir,
+		Args:  args,
+	})
+}
+
+// setMiseVersion uses `mise use`, which is the tool-pin command. `mise set`
+// only manages environment variables.
+func (s *ToolsService) setMiseVersion(tool string, versions []string, scope, dir string) (ops.Operation, error) {
+	targets := make([]string, 0, len(versions))
+	for _, version := range versions {
+		targets = append(targets, tool+"@"+version)
+	}
+	args := []string{"use"}
+	title := fmt.Sprintf("Set %s to %s (global)", tool, strings.Join(versions, ", "))
+	workDir := homeDir()
+	switch scope {
+	case "global":
+		args = append(args, "--global")
+	case "local", "":
+		validDir, err := s.validProjectDir(dir)
+		if err != nil {
+			return ops.Operation{}, err
+		}
+		workDir = validDir
+		target := asdf.MiseWriteTarget(validDir)
+		args = append(args, "--path", target)
+		title = fmt.Sprintf("Set %s to %s (local)", tool, strings.Join(versions, ", "))
+	default:
+		return ops.Operation{}, fmt.Errorf("unknown scope %q", scope)
+	}
+	args = append(args, targets...)
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "set",
 		Title: title,

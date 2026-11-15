@@ -5,11 +5,33 @@
     <link rel="icon" type="image/svg+xml" href="/logo.svg" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover" />
     <meta name="color-scheme" content="dark light" />
+    <script>
+      // Apply the saved palette before the first paint. main.tsx bootstraps the
+      // same value later and owns system-theme changes.
+      (function () {
+        try {
+          var theme =
+            localStorage.getItem("asdf-mise-gui.theme") ||
+            localStorage.getItem("asdf-gui.theme") ||
+            "dark";
+          var dark =
+            theme === "dark" ||
+            (theme === "system" && window.matchMedia("(prefers-color-scheme: dark)").matches);
+          var root = document.documentElement;
+          root.classList.toggle("dark", dark);
+          root.classList.toggle("light", !dark);
+          root.dataset.theme = theme;
+          root.style.colorScheme = dark ? "dark" : "light";
+        } catch (error) {
+          // localStorage may be unavailable; the default dark class stays.
+        }
+      })();
+    </script>
     <meta
       http-equiv="Content-Security-Policy"
       content="default-src 'self' data: blob:; script-src 'self' 'unsafe-inline'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self' ws://localhost:* ws://127.0.0.1:* http://localhost:* http://127.0.0.1:*;"
     />
-    <title>asdf GUI</title>
+    <title>asdf mise GUI</title>
   </head>
   <body>
     <div id="root"></div>

@@ -9,10 +9,11 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
 )
 
 type Status string
@@ -69,13 +70,21 @@ type Detail struct {
 	Output    []OutputLine `json:"output"`
 }
 
-// Request describes an enqueued asdf command.
+// Step is one command in a queued operation. Most requests have a single step;
+// config writers use several so that a save is still serialized as one unit.
+type Step struct {
+	Args []string
+	Env  []string
+}
+
+// Request describes an enqueued version manager command.
 type Request struct {
 	Kind  string
 	Title string
 	Dir   string
 	Args  []string
 	Env   []string
+	Steps []Step
 }
 
 type RunnerFactory func() (asdf.Runner, error)
@@ -84,11 +93,10 @@ type Emitter func(name string, data any)
 type entry struct {
 	op     Operation
 	output []OutputLine
-	args   []string
+	steps  []Step
 	ctx    context.Context
 	cancel context.CancelFunc
 	runner asdf.Runner
-	env    []string
 }
 
 // Queue runs one asdf mutation at a time.
@@ -146,8 +154,17 @@ func (q *Queue) SetOnChange(fn func()) {
 }
 
 func (q *Queue) Enqueue(request Request) (Operation, error) {
-	if len(request.Args) == 0 {
+	steps := request.Steps
+	if len(steps) == 0 && len(request.Args) > 0 {
+		steps = []Step{{Args: request.Args, Env: request.Env}}
+	}
+	if len(steps) == 0 {
 		return Operation{}, errors.New("no command to run")
+	}
+	for _, step := range steps {
+		if len(step.Args) == 0 {
+			return Operation{}, errors.New("no command to run")
+		}
 	}
 	runner, err := q.factory()
 	if err != nil {
@@ -163,6 +180,11 @@ func (q *Queue) Enqueue(request Request) (Operation, error) {
 		return Operation{}, err
 	}
 
+	commands := make([]string, 0, len(steps))
+	for _, step := range steps {
+		commands = append(commands, runner.Command(step.Args...))
+	}
+
 	q.mu.Lock()
 	defer q.mu.Unlock()
 	if q.closed {
@@ -175,7 +197,7 @@ func (q *Queue) Enqueue(request Request) (Operation, error) {
 		ID:        id,
 		Kind:      request.Kind,
 		Title:     request.Title,
-		Command:   runner.Command(request.Args...),
+		Command:   strings.Join(commands, "\n"),
 		Dir:       request.Dir,
 		Status:    StatusQueued,
 		CreatedAt: now,
@@ -185,13 +207,19 @@ func (q *Queue) Enqueue(request Request) (Operation, error) {
 		op.Title = op.Command
 	}
 	ctx, cancel := context.WithCancel(q.rootCtx)
+	copied := make([]Step, len(steps))
+	for index, step := range steps {
+		copied[index] = Step{
+			Args: append([]string(nil), step.Args...),
+			Env:  append([]string(nil), step.Env...),
+		}
+	}
 	q.ops[id] = &entry{
 		op:     op,
-		args:   append([]string(nil), request.Args...),
+		steps:  copied,
 		ctx:    ctx,
 		cancel: cancel,
 		runner: runner,
-		env:    append([]string(nil), request.Env...),
 	}
 	q.order = append(q.order, id)
 	q.pending = append(q.pending, id)
@@ -248,14 +276,12 @@ func (q *Queue) run(id string) {
 	}
 	item.op.Status = StatusRunning
 	item.op.StartedAt = time.Now().UTC().Format(time.RFC3339)
-	item.op.Command = item.runner.Command(item.args...)
 	started := item.op
 	command := item.op.Command
 	dir := item.op.Dir
 	runner := item.runner
-	env := item.env
 	ctx := item.ctx
-	args := item.args
+	steps := item.steps
 	logPath := item.op.LogPath
 	q.mu.Unlock()
 
@@ -275,19 +301,41 @@ func (q *Queue) run(id string) {
 	pumpDone := make(chan struct{})
 	go q.pump(id, stream, logWriter, pumpDone)
 
-	result, runErr := runner.Run(ctx, dir, env, func(streamName, line string) {
+	var result asdf.Result
+	var runErr error
+	// Step markers go through the pump instead of writing to logWriter here:
+	// the pump owns the writer, and routing markers through its channel keeps
+	// the log in step order without concurrent writes to bufio.Writer.
+	logMeta := func(text string) {
 		select {
-		case stream <- OutputLine{Stream: streamName, Text: line}:
+		case stream <- OutputLine{Stream: "meta", Text: text}:
 		case <-ctx.Done():
 		}
-	}, args...)
+	}
+	for index, step := range steps {
+		if err := ctx.Err(); err != nil {
+			runErr = err
+			break
+		}
+		if len(steps) > 1 {
+			logMeta(fmt.Sprintf("# step %d/%d\n$ %s\n\n", index+1, len(steps), runner.Command(step.Args...)))
+		}
+		result, runErr = runner.Run(ctx, dir, step.Env, func(streamName, line string) {
+			select {
+			case stream <- OutputLine{Stream: streamName, Text: line}:
+			case <-ctx.Done():
+			}
+		}, step.Args...)
+		logMeta(fmt.Sprintf("\n# step exit: %d\n", result.ExitCode))
+		if runErr != nil {
+			break
+		}
+	}
 
 	close(stream)
 	<-pumpDone
-	logWriter.Flush()
 	fmt.Fprintf(logWriter, "\n# finished: %s\n# exit: %d\n", time.Now().UTC().Format(time.RFC3339), result.ExitCode)
 	logWriter.Flush()
-	logFile.Close()
 
 	q.complete(id, result, runErr)
 }
@@ -330,6 +378,14 @@ func (q *Queue) pump(id string, stream <-chan OutputLine, logWriter *bufio.Write
 			if !ok {
 				flush()
 				return
+			}
+			if line.Stream == "meta" {
+				// Internal markers are written raw after earlier output so the
+				// log stays ordered, but they are never shown in the UI.
+				flush()
+				logWriter.WriteString(line.Text)
+				logWriter.Flush()
+				continue
 			}
 			batch = append(batch, line)
 			if len(batch) >= 200 {
