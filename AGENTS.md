@@ -2,14 +2,15 @@
 
 ## Branch and pull request policy
 
-- **Never push directly to `master`.** Every change, including docs, version
-  bumps, and release fixes, goes through a pull request.
-- Create a topic branch from an up-to-date `master`, push the branch, and open a
-  PR with `gh pr create`.
-- Wait for CI to pass, then merge the PR (squash or merge commit, matching the
-  repository's existing history). Do not fast-forward `master` locally and push.
-- Tags and releases are cut from `master` only after the PR is merged and CI is
-  green.
+- **Never push directly to `master` or `dev`.** Every change, including docs,
+  version bumps, and release fixes, goes through a pull request.
+- Create a topic branch from an up-to-date `dev`, push the branch, and open a PR
+  against `dev` with `gh pr create --base dev`.
+- Wait for CI to pass, then merge the topic PR into `dev`.
+- Promote `dev` to `master` through a separate `dev` → `master` pull request.
+  Do not fast-forward `master` locally and push.
+- Tags and releases are cut from `master` only after the promotion PR is merged
+  and CI is green.
 
 ## Local verification
 

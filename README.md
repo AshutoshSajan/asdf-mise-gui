@@ -698,13 +698,15 @@ integration.
 
 Contributions are welcome. Before opening a pull request:
 
-1. Keep the selected engine as the source of truth — do not reimplement version resolution.
-2. Run `task test` (backend tests plus a frontend type-check/build) and
+1. Branch from `dev` and target `dev`; changes reach `master` through a
+   separate `dev` → `master` promotion pull request.
+2. Keep the selected engine as the source of truth — do not reimplement version resolution.
+3. Run `task test` (backend tests plus a frontend type-check/build) and
    `task audit`.
-3. Install the hooks with `task hooks:install` so dependency freshness is
+4. Install the hooks with `task hooks:install` so dependency freshness is
    checked before you push.
-4. Regenerate bindings if you changed a service signature.
-5. Keep user-facing changes consistent with the existing dark-first design and
+5. Regenerate bindings if you changed a service signature.
+6. Keep user-facing changes consistent with the existing dark-first design and
    the security boundaries above.
 
 For larger changes, open an issue first so the approach can be discussed.
