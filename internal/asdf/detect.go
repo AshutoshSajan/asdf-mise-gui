@@ -2,6 +2,7 @@ package asdf
 
 import (
 	"context"
+	"errors"
 	"fmt"
 	"os"
 	"os/exec"
@@ -18,6 +19,11 @@ type Detection struct {
 	Engine     string `json:"engine"`
 	BinaryPath string `json:"binaryPath"`
 	DataDir    string `json:"dataDir"`
+	HomeDir    string `json:"homeDir,omitempty"`
+	ConfigDir  string `json:"configDir,omitempty"`
+	RunnerMode string `json:"runnerMode"`
+	WSLDistro  string `json:"wslDistro,omitempty"`
+	WSLHome    string `json:"wslHome,omitempty"`
 	Version    string `json:"version"`
 	Source     string `json:"source"`
 	Error      string `json:"error,omitempty"`
@@ -39,22 +45,65 @@ func Detect(binaryOverride, dataDirOverride string) Detection {
 	return DetectEngine(EngineASDF, binaryOverride, dataDirOverride)
 }
 
-// DetectEngine locates the selected version manager and validates it by running
-// --version. Overrides come from the app settings and take precedence over
-// discovery. With "auto", asdf wins when both engines are installed so that
-// existing users keep their current setup; mise is the fallback.
+// DetectEngine locates the selected version manager on the host. It is kept
+// for callers that do not need runner selection; DetectEngineWithOptions is
+// the settings-aware entry point used by the app.
 func DetectEngine(engine, binaryOverride, dataDirOverride string) Detection {
-	switch engine {
+	return DetectEngineWithOptions(DetectOptions{
+		Engine:          engine,
+		BinaryOverride:  binaryOverride,
+		DataDirOverride: dataDirOverride,
+	})
+}
+
+// DetectEngineWithOptions locates the selected version manager, preferring a
+// native install and falling back to WSL on Windows in auto mode. Overrides
+// take precedence over discovery. With "auto", asdf wins when both engines are
+// installed so existing users keep their current setup; mise is the fallback.
+func DetectEngineWithOptions(opts DetectOptions) Detection {
+	mode := NormalizeRunnerMode(opts.RunnerMode)
+	if mode == RunnerWSL {
+		return detectWSL(opts)
+	}
+	native := detectNativeEngine(opts)
+	if mode == RunnerNative || runtime.GOOS != "windows" || native.Found {
+		return native
+	}
+
+	// Auto on Windows: a native install is preferred, but a Windows build with
+	// only WSL-hosted tooling should still work.
+	distros, err := WSLDistros()
+	if err != nil || len(distros) == 0 {
+		return native
+	}
+	wslOpts := opts
+	if strings.TrimSpace(wslOpts.WSLDistro) == "" {
+		wslOpts.WSLDistro = distros[0]
+	}
+	wsl := detectWSL(wslOpts)
+	if wsl.Found {
+		return wsl
+	}
+	if native.Error == "" {
+		native.Error = wsl.Error
+	} else if wsl.Error != "" {
+		native.Error = fmt.Sprintf("%s; WSL: %s", native.Error, wsl.Error)
+	}
+	return native
+}
+
+func detectNativeEngine(opts DetectOptions) Detection {
+	switch opts.Engine {
 	case EngineASDF:
-		return detectASDF(binaryOverride, dataDirOverride)
+		return detectASDF(opts.BinaryOverride, opts.DataDirOverride)
 	case EngineMise:
-		return detectMise(binaryOverride, dataDirOverride)
+		return detectMise(opts.BinaryOverride, opts.DataDirOverride)
 	case "", EngineAuto:
-		asdfDetection := detectASDF(binaryOverride, dataDirOverride)
+		asdfDetection := detectASDF(opts.BinaryOverride, opts.DataDirOverride)
 		if asdfDetection.Found {
 			return asdfDetection
 		}
-		miseDetection := detectMise(binaryOverride, dataDirOverride)
+		miseDetection := detectMise(opts.BinaryOverride, opts.DataDirOverride)
 		if miseDetection.Found {
 			return miseDetection
 		}
@@ -63,15 +112,36 @@ func DetectEngine(engine, binaryOverride, dataDirOverride string) Detection {
 		return asdfDetection
 	default:
 		return Detection{
-			Engine:    engine,
-			CheckedAt: time.Now().UTC().Format(time.RFC3339),
-			Error:     fmt.Sprintf("unknown engine %q: choose auto, asdf, or mise", engine),
+			Engine:     opts.Engine,
+			RunnerMode: RunnerNative,
+			CheckedAt:  time.Now().UTC().Format(time.RFC3339),
+			Error:      fmt.Sprintf("unknown engine %q: choose auto, asdf, or mise", opts.Engine),
 		}
 	}
 }
 
+// NewRunnerForDetection builds the runner that matches a detection result.
+func NewRunnerForDetection(d Detection) (Runner, error) {
+	if !d.Found {
+		message := d.Error
+		if message == "" {
+			message = "the version manager is not available"
+		}
+		return nil, errors.New(message)
+	}
+	if d.RunnerMode == RunnerWSL {
+		return NewWSLRunner(d.WSLDistro, d.Engine, d.BinaryPath, d.DataDir, d.WSLHome), nil
+	}
+	return NewLocalRunnerForEngine(d.Engine, d.BinaryPath, d.DataDir), nil
+}
+
 func detectASDF(binaryOverride, dataDirOverride string) Detection {
-	d := Detection{Engine: EngineASDF, CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	d := Detection{
+		Engine:     EngineASDF,
+		RunnerMode: RunnerNative,
+		HomeDir:    homeDir(),
+		CheckedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
 
 	candidates := candidateBinaries("asdf", binaryOverride)
 	var firstErr string

@@ -23,6 +23,7 @@ export const queryKeys = {
   available: (tool: string) => ["available", tool] as const,
   latest: ["latest"] as const,
   update: ["update"] as const,
+  wslDistros: ["wsl-distros"] as const,
 };
 
 export function useStatus(refresh = false) {
@@ -122,6 +123,16 @@ export function useDiagnostics(enabled: boolean) {
     queryFn: () => ManagerService.Diagnostics(),
     staleTime: 15_000,
     enabled,
+  });
+}
+
+export function useWSLDistros(enabled: boolean) {
+  return useQuery({
+    queryKey: queryKeys.wslDistros,
+    queryFn: () => SettingsService.WSLDistros(),
+    staleTime: 60_000,
+    enabled,
+    retry: false,
   });
 }
 

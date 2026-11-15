@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"os"
 	"path/filepath"
+	"strings"
 	"sync"
 )
 
@@ -17,6 +18,8 @@ type Settings struct {
 	Theme             string   `json:"theme"`
 	CheckForUpdates   bool     `json:"checkForUpdates"`
 	RecentProjects    []string `json:"recentProjects"`
+	RunnerMode        string   `json:"runnerMode"`
+	WSLDistro         string   `json:"wslDistro"`
 }
 
 const (
@@ -131,6 +134,12 @@ func sanitize(value Settings) Settings {
 	default:
 		value.Theme = "dark"
 	}
+	switch value.RunnerMode {
+	case "native", "wsl":
+	default:
+		value.RunnerMode = "auto"
+	}
+	value.WSLDistro = strings.TrimSpace(value.WSLDistro)
 	if value.RecentProjects == nil {
 		value.RecentProjects = []string{}
 	}
