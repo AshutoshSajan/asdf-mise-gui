@@ -9,7 +9,7 @@ import (
 	"testing"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
 )
 
 type fakeRunner struct {
@@ -243,5 +243,67 @@ func TestQueueDetailContainsOutput(t *testing.T) {
 	}
 	if detail.Output[0].Stream != "stdout" {
 		t.Fatalf("unexpected stream: %+v", detail.Output[0])
+	}
+}
+
+func TestQueueRunsStepsInOrder(t *testing.T) {
+	runner := &fakeRunner{}
+	queue, events := newTestQueue(t, runner)
+	op, err := queue.Enqueue(Request{
+		Kind:  "project-save",
+		Title: "save",
+		Steps: []Step{
+			{Args: []string{"use", "--remove", "ruby"}},
+			{Args: []string{"use", "nodejs@22.0.0"}},
+		},
+	})
+	if err != nil {
+		t.Fatal(err)
+	}
+	waitEvent(t, events, EventFinished)
+
+	list := queue.List()
+	if len(list) != 1 || list[0].Status != StatusSucceeded {
+		t.Fatalf("unexpected operation: %+v", list)
+	}
+
+	runner.mu.Lock()
+	calls := append([][]string(nil), runner.calls...)
+	runner.mu.Unlock()
+	want := [][]string{{"use", "--remove", "ruby"}, {"use", "nodejs@22.0.0"}}
+	if len(calls) != len(want) || strings.Join(calls[0], " ") != strings.Join(want[0], " ") || strings.Join(calls[1], " ") != strings.Join(want[1], " ") {
+		t.Fatalf("unexpected step calls: %+v", calls)
+	}
+
+	raw, err := os.ReadFile(op.LogPath)
+	if err != nil {
+		t.Fatal(err)
+	}
+	log := string(raw)
+	order := []string{
+		"# step 1/2",
+		"running use --remove ruby",
+		"# step exit: 0",
+		"# step 2/2",
+		"running use nodejs@22.0.0",
+		"# step exit: 0",
+	}
+	last := -1
+	for _, marker := range order {
+		index := strings.Index(log[last+1:], marker)
+		if index < 0 {
+			t.Fatalf("missing %q in log:\n%s", marker, log)
+		}
+		last += index + 1
+	}
+
+	detail, err := queue.Get(op.ID)
+	if err != nil {
+		t.Fatal(err)
+	}
+	for _, line := range detail.Output {
+		if line.Stream == "meta" {
+			t.Fatalf("internal step marker leaked into output: %+v", line)
+		}
 	}
 }

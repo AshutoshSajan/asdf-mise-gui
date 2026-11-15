@@ -22,37 +22,37 @@ import * as ops$0 from "../ops/models.js";
 import * as $models from "./models.js";
 
 export function Available(tool: string): $CancellablePromise<string[] | null> {
-    return $Call.ByID(3826233497, tool);
+    return $Call.ByID(1622127840, tool);
 }
 
 export function Install(tool: string, version: string): $CancellablePromise<ops$0.Operation> {
-    return $Call.ByID(2340331529, tool, version);
+    return $Call.ByID(3088613560, tool, version);
 }
 
 export function InstallAll(dir: string): $CancellablePromise<ops$0.Operation> {
-    return $Call.ByID(1417793808, dir);
+    return $Call.ByID(2316979099, dir);
 }
 
 export function LatestAll(): $CancellablePromise<asdf$0.LatestVersion[] | null> {
-    return $Call.ByID(2562745240);
+    return $Call.ByID(1252428173);
 }
 
 export function List(): $CancellablePromise<$models.ToolView[] | null> {
-    return $Call.ByID(42541670);
+    return $Call.ByID(128239849);
 }
 
 /**
- * SetVersion writes a version with `asdf set`, preserving asdf's own parsing
- * and comment handling. scope is "local" or "global".
+ * SetVersion writes a version with the engine's own CLI, preserving its
+ * parsing and comment handling. scope is "local" or "global".
  */
 export function SetVersion(tool: string, versions: string[] | null, scope: string, dir: string): $CancellablePromise<ops$0.Operation> {
-    return $Call.ByID(2124296502, tool, versions, scope, dir);
+    return $Call.ByID(967203125, tool, versions, scope, dir);
 }
 
 export function Uninstall(tool: string, version: string): $CancellablePromise<ops$0.Operation> {
-    return $Call.ByID(3921282332, tool, version);
+    return $Call.ByID(2516670017, tool, version);
 }
 
 export function Where(tool: string, version: string): $CancellablePromise<string> {
-    return $Call.ByID(2722326993, tool, version);
+    return $Call.ByID(3023944064, tool, version);
 }

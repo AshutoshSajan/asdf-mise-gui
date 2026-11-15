@@ -8,10 +8,10 @@
 			"FileVersion": "0.1.0",
 			"ProductVersion": "0.1.0",
 			"CompanyName": "Ashutosh Sajan",
-			"FileDescription": "A native desktop GUI for the asdf version manager",
+			"FileDescription": "A native desktop GUI for asdf and mise",
 			"LegalCopyright": "(c) 2026, Ashutosh Sajan",
-			"ProductName": "asdf-gui",
-			"Comments": "Drive the real asdf CLI from a fast, native desktop app."
+			"ProductName": "asdf-mise-gui",
+			"Comments": "Drive the real asdf or mise CLI from a fast, native desktop app."
 		}
 	}
 }

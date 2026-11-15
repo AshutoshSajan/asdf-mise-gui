@@ -23,7 +23,7 @@ import { EmptyState, InlineEmpty } from "../components/empty-state";
 import { Input, Label } from "../components/ui/input";
 import { Hint } from "../components/ui/tooltip";
 import { useToast } from "../components/ui/toast";
-import { useProject, useStatus, useTools, queryKeys } from "../lib/query";
+import { useProject, useOperation, useStatus, useTools, queryKeys } from "../lib/query";
 import { useQueueOperation } from "../lib/actions";
 import { basename, errorMessage, pluralize, shortenPath, splitVersions } from "../lib/format";
 import { navigate } from "../lib/route";
@@ -48,16 +48,33 @@ export function Project() {
   const [addTool, setAddTool] = useState("");
   const [addVersions, setAddVersions] = useState("");
   const [loadedKey, setLoadedKey] = useState("");
+  const [pendingSave, setPendingSave] = useState<string | null>(null);
 
   const project = useProject(dir, false, status.isSuccess);
+  const pendingOperation = useOperation(pendingSave);
 
   useEffect(() => {
-    if (dirty || !project.data) return;
+    if (dirty || pendingSave || !project.data) return;
     const key = `${project.data.dir}:${project.data.loadedAt}`;
     if (key === loadedKey) return;
     setLoadedKey(key);
     setEntries(normalizeEntries(project.data.entries ?? []));
-  }, [project.data, dirty, loadedKey]);
+  }, [project.data, dirty, loadedKey, pendingSave]);
+
+  // A mise TOML save is queued, not immediate. Keep the optimistic rows until
+  // the operation finishes; if it fails, leave the edits in place so they can
+  // be retried instead of silently reverting to the old file.
+  useEffect(() => {
+    const operationStatus = pendingOperation.data?.operation.status;
+    if (!pendingSave || !operationStatus) return;
+    if (operationStatus === "queued" || operationStatus === "running" || operationStatus === "canceling") return;
+    setPendingSave(null);
+    if (operationStatus === "succeeded") {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.project(dir) });
+    } else {
+      setDirty(true);
+    }
+  }, [dir, pendingOperation.data?.operation.status, pendingSave, queryClient]);
 
   const save = useMutation({
     mutationFn: (next: ToolVersionEntry[]) =>
@@ -69,10 +86,25 @@ export function Project() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.recent });
       void queryClient.invalidateQueries({ queryKey: queryKeys.tools });
       void queryClient.invalidateQueries({ queryKey: queryKeys.status });
-      toast({ title: "Project saved", description: `${view.entries?.length ?? 0} tools pinned in ${basename(view.filePath)}.`, variant: "success" });
+      if (view.queued) {
+        if (view.operation) setPendingSave(view.operation.id);
+        toast({
+          title: "Save queued",
+          description: view.operation?.title
+            ? `${view.operation.title} is queued in the operation queue.`
+            : "The mise config update is queued in the operation queue.",
+          variant: "info",
+        });
+        return;
+      }
+      toast({
+        title: "Project saved",
+        description: `${view.entries?.length ?? 0} tools pinned in ${basename(view.filePath)}.`,
+        variant: "success",
+      });
     },
     onError: (error) => {
-      toast({ title: "Could not save .tool-versions", description: errorMessage(error), variant: "error" });
+      toast({ title: "Could not save project config", description: errorMessage(error), variant: "error" });
     },
   });
 
@@ -108,7 +140,7 @@ export function Project() {
 
   const openRecent = (path: string) => {
     if (dirty) {
-      const confirmed = window.confirm("Discard unsaved .tool-versions changes?");
+      const confirmed = window.confirm("Discard unsaved project config changes?");
       if (!confirmed) return;
     }
     setDirty(false);
@@ -121,7 +153,7 @@ export function Project() {
   };
 
   const refresh = () => {
-    if (dirty && !window.confirm("Discard unsaved .tool-versions changes and reload?")) return;
+    if (dirty && !window.confirm("Discard unsaved project config changes and reload?")) return;
     setDirty(false);
     void queryClient.invalidateQueries({ queryKey: queryKeys.project(dir) });
   };
@@ -163,15 +195,29 @@ export function Project() {
 
   const invalidEntries = entries.filter((entry) => (entry.versions?.length ?? 0) === 0);
   const duplicateTools = findDuplicates(entries.map((entry) => entry.tool));
-  const canSave = dirty && entries.length > 0 && invalidEntries.length === 0 && duplicateTools.length === 0;
-  const fileLabel = project.data?.filePath ? basename(project.data.filePath) : ".tool-versions";
+  const canSave = !pendingSave && dirty && entries.length > 0 && invalidEntries.length === 0 && duplicateTools.length === 0;
+  const engine = project.data?.engine ?? status.data?.engine ?? "asdf";
+  const isMise = engine === "mise";
+  const configLabel = isMise ? "mise.toml" : ".tool-versions";
+  const fileLabel = project.data?.filePath ? basename(project.data.filePath) : configLabel;
+  const saveHint = pendingSave
+    ? "A queued mise save is still running. Editing pauses until it finishes."
+    : project.data?.queued
+      ? "Saving through the mise CLI keeps TOML formatting and install state authoritative."
+      : isMise && project.data?.configFormat === "toml"
+        ? "Saving a mise TOML file runs mise use in the operation queue."
+        : "Comments and unrelated lines are preserved; only pinned entries change.";
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Workspace"
         title="Project"
-        description="Inspect and edit the .tool-versions file for any project. Comments and unrelated lines are preserved; only pinned entries change."
+        description={
+          isMise
+            ? "Inspect and edit the mise config for any project. TOML saves go through the mise CLI; .tool-versions text is edited in place."
+            : "Inspect and edit the .tool-versions file for any project. Comments and unrelated lines are preserved; only pinned entries change."
+        }
         actions={
           <>
             <Hint label="Open the project directory">
@@ -262,6 +308,7 @@ export function Project() {
                   <FileCode2 className="size-3.5 text-faint" />
                   <span className="font-mono text-[11px] text-muted">{fileLabel}</span>
                   {dirty ? <Badge variant="warning" className="text-[10px]">unsaved</Badge> : null}
+                  {pendingSave ? <Badge variant="info" className="text-[10px]">saving</Badge> : null}
                 </div>
                 <span className="text-[10px] text-faint">
                   {entries.length} {pluralize(entries.length, "tool")} pinned
@@ -271,11 +318,13 @@ export function Project() {
               {entries.length === 0 ? (
                 <EmptyState
                   icon={<FileCode2 className="size-5" />}
-                  title={project.data?.fileExists ? "No tools pinned in this file" : "Start a .tool-versions file"}
+                  title={project.data?.fileExists ? "No tools pinned in this file" : `Start a ${configLabel} file`}
                   description={
                     project.data?.usingParent
-                      ? "This project inherits its file from a parent directory. Saving here creates a project-local file that takes precedence."
-                      : "Add a tool below, then save. The file is written atomically next to your sources."
+                      ? "This project inherits its config from a parent directory. Saving here creates a project-local file that takes precedence."
+                      : isMise
+                        ? "Add a tool below, then save. mise records the request in the project config and installs the version if needed."
+                        : "Add a tool below, then save. The file is written atomically next to your sources."
                   }
                   className="py-8"
                 />
@@ -304,6 +353,7 @@ export function Project() {
                             className="h-7 min-w-40 flex-1 font-mono text-[11px]"
                             placeholder="version or ref:…"
                             aria-label={`Versions for ${entry.tool}`}
+                            disabled={Boolean(pendingSave)}
                           />
                           <div className="flex shrink-0 items-center gap-1">
                             {current ? (
@@ -323,6 +373,7 @@ export function Project() {
                               onClick={() => removeEntry(index)}
                               aria-label={`Remove ${entry.tool}`}
                               className="text-faint hover:text-danger"
+                              disabled={Boolean(pendingSave)}
                             >
                               <X className="size-3.5" />
                             </Button>
@@ -348,6 +399,7 @@ export function Project() {
                     placeholder="tool name"
                     list="project-tool-names"
                     className="h-8 min-w-32 flex-1 font-mono text-[11px]"
+                    disabled={Boolean(pendingSave)}
                   />
                   <datalist id="project-tool-names">
                     {toolNames.map((name) => (
@@ -359,19 +411,22 @@ export function Project() {
                     onChange={(event) => setAddVersions(event.target.value)}
                     placeholder="1.2.3 (space-separated fallbacks allowed)"
                     className="h-8 min-w-44 flex-[2] font-mono text-[11px]"
+                    disabled={Boolean(pendingSave)}
                     onKeyDown={(event) => {
                       if (event.key === "Enter") addEntry();
                     }}
                   />
-                  <Button size="sm" variant="secondary" className="h-8" onClick={addEntry}>
+                  <Button size="sm" variant="secondary" className="h-8" onClick={addEntry} disabled={Boolean(pendingSave)}>
                     <Plus className="size-3.5" />
                     Add
                   </Button>
                 </div>
                 <p className="mt-2 text-[10px] leading-relaxed text-faint">
-                  {plugins.length > 0
-                    ? `Installed plugins: ${plugins.slice(0, 8).join(", ")}${plugins.length > 8 ? "…" : ""}`
-                    : "No plugins installed yet. Add one on the Plugins screen so asdf can resolve versions."}
+                  {isMise
+                    ? "mise resolves tools through its registry and backends. Add custom plugins on the Plugins screen when a tool needs one."
+                    : plugins.length > 0
+                      ? `Installed plugins: ${plugins.slice(0, 8).join(", ")}${plugins.length > 8 ? "…" : ""}`
+                      : "No plugins installed yet. Add one on the Plugins screen so asdf can resolve versions."}
                 </p>
               </div>
 
@@ -393,13 +448,14 @@ export function Project() {
 
               <div className="mt-4 flex items-center justify-between gap-3 border-t border-line-soft pt-3">
                 <p className="text-[10px] leading-relaxed text-faint">
-                  Saving writes <span className="font-mono">{fileLabel}</span> atomically. Comments are preserved.
+                  {saveHint}
                 </p>
                 <div className="flex shrink-0 items-center gap-2">
                   {dirty ? (
                     <Button
                       variant="ghost"
                       size="sm"
+                      disabled={Boolean(pendingSave)}
                       onClick={() => {
                         setEntries(normalizeEntries(project.data?.entries ?? []));
                         setDirty(false);
@@ -431,16 +487,21 @@ export function Project() {
 
       <div className="flex flex-wrap items-center justify-between gap-3 rounded-xl border border-line-soft bg-canvas/30 px-4 py-3">
         <p className="text-[11px] leading-relaxed text-faint">
-          The effective file is the nearest <span className="font-mono">.tool-versions</span> walking up from the project
-          directory. Saving always targets the selected project itself, never a parent.
+          {isMise
+            ? "The effective file is the nearest mise.toml, .tool-versions, or other mise config walking up from the project directory. Saving always targets the selected project itself, never a parent."
+            : "The effective file is the nearest .tool-versions walking up from the project directory. Saving always targets the selected project itself, never a parent."}
         </p>
         <Button
           variant="ghost"
           size="sm"
           className="h-7 text-[11px]"
-          onClick={() => void ManagerService.OpenURL("https://asdf-vm.com/manage/configuration.html#tool-versions")}
+          onClick={() =>
+            void ManagerService.OpenURL(
+              isMise ? "https://mise.jdx.dev/configuration.html" : "https://asdf-vm.com/manage/configuration.html#tool-versions",
+            )
+          }
         >
-          .tool-versions docs
+          {isMise ? "mise config docs" : ".tool-versions docs"}
           <ExternalLink className="size-3" />
         </Button>
       </div>
@@ -536,7 +597,7 @@ function RecentProjects({
                   </div>
                   {entry.hasToolVersions ? (
                     <Badge variant="outline" className="shrink-0 px-1.5 text-[9px] font-mono">
-                      .tool-versions
+                      {entry.configFile ? basename(entry.configFile) : ".tool-versions"}
                     </Badge>
                   ) : null}
                 </button>
@@ -561,7 +622,7 @@ function GlobalFile({ view }: { view?: ProjectView }) {
       </CardHeader>
       <CardContent className="pt-3">
         <div className="mb-2 truncate font-mono text-[10px] text-faint" title={view?.globalFilePath}>
-          {view?.globalFilePath ? shortenPath(view.globalFilePath, 42) : "~/.tool-versions"}
+          {view?.globalFilePath ? shortenPath(view.globalFilePath, 42) : view?.engine === "mise" ? "mise global config" : "~/.tool-versions"}
         </div>
         {entries.length === 0 ? (
           <p className="text-[11px] leading-relaxed text-faint">

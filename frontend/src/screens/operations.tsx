@@ -109,7 +109,7 @@ export function Operations({ selectedID }: { selectedID: string | null }) {
       <PageHeader
         eyebrow="Execution"
         title="Operations"
-        description="Every asdf mutation is serialized through one queue. Streamed stdout and stderr stay attached to each run, with a full log on disk."
+        description="Every version-manager mutation is serialized through one queue. Streamed stdout and stderr stay attached to each run, with a full log on disk."
         actions={
           <>
             <Button variant="ghost" size="sm" onClick={openLogsDir}>
@@ -179,7 +179,7 @@ export function Operations({ selectedID }: { selectedID: string | null }) {
         <EmptyState
           icon={<Terminal className="size-5" />}
           title="No operations yet"
-          description="Install a version, add a plugin, or pin a toolchain. Each asdf invocation is recorded here with its live output."
+          description="Install a version, add a plugin, or pin a toolchain. Each engine invocation is recorded here with its live output."
           action={
             <Button size="sm" variant="secondary" onClick={() => navigate("/tools")}>
               Go to Tools
@@ -344,7 +344,7 @@ function OperationDetail({ id }: { id: string | null }) {
               Open log
             </Button>
           )}
-          <CopyButton value={operation.command || `asdf ${operation.kind}`} size="sm" variant="ghost" className="h-7" />
+          <CopyButton value={operation.command || operation.kind} size="sm" variant="ghost" className="h-7" />
         </div>
       </div>
 

@@ -35,16 +35,26 @@ type Runner interface {
 
 const captureLimit = 8 << 20 // 8 MiB is ample for any command output we parse.
 
-// LocalRunner runs the asdf binary on the host.
+// LocalRunner runs the version manager binary on the host.
 type LocalRunner struct {
+	engine     string
 	binaryPath string
 	dataDir    string
 }
 
 func NewLocalRunner(binaryPath, dataDir string) *LocalRunner {
-	return &LocalRunner{binaryPath: binaryPath, dataDir: dataDir}
+	return NewLocalRunnerForEngine(EngineASDF, binaryPath, dataDir)
 }
 
+// NewLocalRunnerForEngine builds a runner for asdf or mise.
+func NewLocalRunnerForEngine(engine, binaryPath, dataDir string) *LocalRunner {
+	if engine != EngineMise {
+		engine = EngineASDF
+	}
+	return &LocalRunner{engine: engine, binaryPath: binaryPath, dataDir: dataDir}
+}
+
+func (r *LocalRunner) Engine() string     { return r.engine }
 func (r *LocalRunner) BinaryPath() string { return r.binaryPath }
 func (r *LocalRunner) DataDir() string    { return r.dataDir }
 
@@ -59,12 +69,12 @@ func (r *LocalRunner) Run(ctx context.Context, dir string, extraEnv []string, st
 	defer func() { result.Duration = time.Since(started).Milliseconds() }()
 
 	if r.binaryPath == "" {
-		return result, errors.New("asdf binary is not configured")
+		return result, errors.New("version manager binary is not configured")
 	}
 
 	cmd := exec.CommandContext(ctx, r.binaryPath, args...)
 	cmd.Dir = dir
-	cmd.Env = append(BuildEnv(r.binaryPath, r.dataDir), extraEnv...)
+	cmd.Env = append(BuildEnvForEngine(r.engine, r.binaryPath, r.dataDir), extraEnv...)
 	configureProcessGroup(cmd)
 
 	stdout, err := cmd.StdoutPipe()
@@ -108,26 +118,31 @@ func (r *LocalRunner) Run(ctx context.Context, dir string, extraEnv []string, st
 		if result.ExitCode < 0 {
 			result.ExitCode = 1
 		}
-		return result, &ExitError{Result: result, Err: waitErr}
+		return result, &ExitError{Result: result, Err: waitErr, Label: r.engine}
 	}
 	return result, nil
 }
 
-// ExitError reports a non-zero asdf exit.
+// ExitError reports a non-zero version manager exit.
 type ExitError struct {
 	Result Result
 	Err    error
+	Label  string
 }
 
 func (e *ExitError) Error() string {
+	label := e.Label
+	if label == "" {
+		label = EngineASDF
+	}
 	detail := strings.TrimSpace(e.Result.Stderr)
 	if detail == "" {
 		detail = strings.TrimSpace(e.Result.Stdout)
 	}
 	if detail == "" {
-		return fmt.Sprintf("asdf exited with code %d", e.Result.ExitCode)
+		return fmt.Sprintf("%s exited with code %d", label, e.Result.ExitCode)
 	}
-	return fmt.Sprintf("asdf exited with code %d: %s", e.Result.ExitCode, truncate(detail, 800))
+	return fmt.Sprintf("%s exited with code %d: %s", label, e.Result.ExitCode, truncate(detail, 800))
 }
 
 func (e *ExitError) Unwrap() error { return e.Err }

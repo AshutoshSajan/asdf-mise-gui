@@ -10,12 +10,18 @@ import (
 
 // Settings are user-controlled overrides. Empty values mean "auto-detect".
 type Settings struct {
+	Engine            string   `json:"engine"`
 	BinaryPath        string   `json:"binaryPath"`
 	DataDir           string   `json:"dataDir"`
 	DefaultProjectDir string   `json:"defaultProjectDir"`
 	Theme             string   `json:"theme"`
 	RecentProjects    []string `json:"recentProjects"`
 }
+
+const (
+	appName       = "asdf-mise-gui"
+	legacyAppName = "asdf-gui"
+)
 
 // Store persists settings as JSON in the platform config directory.
 type Store struct {
@@ -29,7 +35,7 @@ func ConfigDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "asdf-gui"), nil
+	return filepath.Join(dir, appName), nil
 }
 
 func LogsDir() (string, error) {
@@ -37,7 +43,15 @@ func LogsDir() (string, error) {
 	if err != nil {
 		return "", err
 	}
-	return filepath.Join(dir, "asdf-gui", "logs"), nil
+	return filepath.Join(dir, appName, "logs"), nil
+}
+
+func legacySettingsPath() (string, bool) {
+	dir, err := os.UserConfigDir()
+	if err != nil {
+		return "", false
+	}
+	return filepath.Join(dir, legacyAppName, "settings.json"), true
 }
 
 // Load reads settings, creating defaults when no file exists.
@@ -56,6 +70,9 @@ func Load() (*Store, error) {
 	raw, err := os.ReadFile(store.path)
 	if err != nil {
 		if os.IsNotExist(err) {
+			if legacyPath, ok := legacySettingsPath(); ok {
+				migrateSettings(store, legacyPath)
+			}
 			return store, nil
 		}
 		return nil, err
@@ -67,7 +84,30 @@ func Load() (*Store, error) {
 	return store, nil
 }
 
+// migrateSettings imports a pre-rename settings file the first time the new
+// config location is used. The legacy file is left in place so downgrading
+// still finds its configuration.
+func migrateSettings(store *Store, legacyPath string) bool {
+	raw, err := os.ReadFile(legacyPath)
+	if err != nil {
+		return false
+	}
+	var legacy Settings
+	if err := json.Unmarshal(raw, &legacy); err != nil {
+		return false
+	}
+	// Save updates the in-memory value before writing, so a failed migration
+	// write still leaves the imported settings usable for this session.
+	_ = store.Save(legacy)
+	return true
+}
+
 func sanitize(value Settings) Settings {
+	switch value.Engine {
+	case "asdf", "mise":
+	default:
+		value.Engine = "auto"
+	}
 	switch value.Theme {
 	case "system", "light", "dark":
 	default:

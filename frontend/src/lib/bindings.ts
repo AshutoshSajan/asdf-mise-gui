@@ -5,7 +5,7 @@ export {
   ProjectService,
   SettingsService,
   ToolsService,
-} from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/services";
+} from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services";
 
 export type {
   Check,
@@ -15,10 +15,10 @@ export type {
   SettingsView,
   Status as ManagerStatus,
   ToolView,
-} from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/services/models";
+} from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services/models";
 
-export type { Detail, Operation, OutputLine } from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/ops/models";
-export { Status as OperationStatus } from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/ops/models";
+export type { Detail, Operation, OutputLine } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/ops/models";
+export { Status as OperationStatus } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/ops/models";
 
 export type {
   AvailablePlugin,
@@ -27,9 +27,9 @@ export type {
   LatestVersion,
   Plugin,
   ToolVersionEntry,
-} from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/asdf/models";
+} from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/asdf/models";
 
-export type { Settings } from "../../bindings/github.com/AshutoshSajan/asdf-gui/internal/settings/models";
+export type { Settings } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/settings/models";
 
 export {
   OperationFinished,

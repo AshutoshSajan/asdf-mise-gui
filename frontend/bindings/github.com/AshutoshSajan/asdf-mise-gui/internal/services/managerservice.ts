@@ -15,24 +15,24 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as $models from "./models.js";
 
 export function Diagnostics(): $CancellablePromise<$models.Diagnostics> {
-    return $Call.ByID(2422302062);
+    return $Call.ByID(3029300311);
 }
 
 export function OpenConfigDir(): $CancellablePromise<void> {
-    return $Call.ByID(1602248311);
+    return $Call.ByID(2151849882);
 }
 
 export function OpenLogsDir(): $CancellablePromise<void> {
-    return $Call.ByID(1475315388);
+    return $Call.ByID(1566784313);
 }
 
 /**
  * OpenURL opens an http(s) documentation link in the default browser.
  */
 export function OpenURL(rawURL: string): $CancellablePromise<void> {
-    return $Call.ByID(2009131287, rawURL);
+    return $Call.ByID(835889402, rawURL);
 }
 
 export function Status(refresh: boolean): $CancellablePromise<$models.Status> {
-    return $Call.ByID(3101072648, refresh);
+    return $Call.ByID(2877094607, refresh);
 }

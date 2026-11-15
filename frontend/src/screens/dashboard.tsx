@@ -34,6 +34,13 @@ export function Dashboard() {
   const project = useProject(defaultDir, false, status.isSuccess);
 
   const detection = status.data?.detection;
+  const engine = status.data?.engine || detection?.engine || "asdf";
+  const isMise = engine === "mise";
+  const configLabel = isMise
+    ? project.data?.configFormat === "tool-versions"
+      ? ".tool-versions"
+      : "mise.toml"
+    : ".tool-versions";
   const currentMap = new Map((project.data?.current ?? []).map((item) => [item.name, item]));
   const missing = project.data?.missing ?? [];
   const recentOperations = (operations.data ?? []).slice(0, 4);
@@ -43,7 +50,7 @@ export function Dashboard() {
   };
 
   const openDocs = () => {
-    void ManagerService.OpenURL("https://asdf-vm.com/guide/getting-started.html");
+    void ManagerService.OpenURL(isMise ? "https://mise.jdx.dev/" : "https://asdf-vm.com/guide/getting-started.html");
   };
 
   return (
@@ -51,7 +58,7 @@ export function Dashboard() {
       <PageHeader
         eyebrow="Overview"
         title="Dashboard"
-        description="One place to see your asdf engine, installed toolchains, and the project you are working on."
+        description={`One place to see your ${engine} engine, installed toolchains, and the project you are working on.`}
         actions={
           <>
             <Button variant="secondary" size="sm" onClick={() => navigate("/project")}>
@@ -72,10 +79,11 @@ export function Dashboard() {
               <Terminal className="size-5 text-warn" />
             </div>
             <div className="min-w-0 flex-1">
-              <h2 className="text-[15px] font-semibold text-ink">Connect asdf to get started</h2>
+              <h2 className="text-[15px] font-semibold text-ink">Connect {engine} to get started</h2>
               <p className="mt-1.5 max-w-2xl text-[13px] leading-relaxed text-muted">
-                asdf GUI drives the real asdf CLI. Install asdf and its Bash + Git dependencies, or point the app at an
-                existing binary in Settings.
+                {isMise
+                  ? "asdf mise GUI drives the real mise CLI. Install mise, or point the app at an existing binary in Settings."
+                  : "asdf mise GUI drives the real asdf CLI. Install asdf and its Bash + Git dependencies, or point the app at an existing binary in Settings."}
               </p>
               {detection?.error ? (
                 <p className="mt-2 rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 font-mono text-[11px] text-danger">
@@ -88,7 +96,7 @@ export function Dashboard() {
                   <ArrowRight className="size-3.5" />
                 </Button>
                 <Button size="sm" variant="ghost" onClick={openDocs}>
-                  asdf install guide
+                  {engine} install guide
                   <ExternalLink className="size-3.5" />
                 </Button>
               </div>
@@ -99,7 +107,7 @@ export function Dashboard() {
 
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
         <StatCard
-          label="asdf engine"
+          label={`${engine} engine`}
           value={detection?.version || "—"}
           hint={detection?.source ? `found via ${detection.source}` : "not detected"}
           icon={<Terminal className="size-4" />}
@@ -136,7 +144,7 @@ export function Dashboard() {
                   <span className="truncate font-mono text-[11px] text-muted" title={project.data?.dir}>
                     {project.data?.dir ? shortenPath(project.data.dir, 62) : "resolving…"}
                   </span>
-                  {project.data?.usingParent ? <Badge variant="warning">parent file</Badge> : null}
+                  {project.data?.usingParent ? <Badge variant="warning">parent config</Badge> : null}
                 </div>
               </div>
               <div className="flex items-center gap-1.5">
@@ -192,11 +200,11 @@ export function Dashboard() {
               ) : (
                 <EmptyState
                   icon={<Boxes className="size-5" />}
-                  title={project.data?.fileExists ? "No tools pinned" : "No .tool-versions yet"}
+                  title={project.data?.fileExists ? "No tools pinned" : `No ${configLabel} yet`}
                   description={
                     project.data?.fileExists
-                      ? "This project's file exists but does not pin any tools."
-                      : "Open the project screen to create a .tool-versions file and pin your first toolchain."
+                      ? "This project's config exists but does not pin any tools."
+                      : `Open the project screen to create a ${configLabel} file and pin your first toolchain.`
                   }
                   action={
                     <Button size="sm" variant="secondary" onClick={() => navigate("/project")}>
@@ -209,8 +217,11 @@ export function Dashboard() {
 
               {(project.data?.warnings ?? []).length > 0 ? (
                 <div className="mt-3 space-y-1.5">
-                  {(project.data?.warnings ?? []).map((warning) => (
-                    <div key={warning} className="flex items-start gap-2 text-[11px] leading-relaxed text-warn">
+                  {(project.data?.warnings ?? []).map((warning, index) => (
+                    <div
+                      key={`${index}:${warning}`}
+                      className="flex items-start gap-2 text-[11px] leading-relaxed text-warn"
+                    >
                       <AlertTriangle className="mt-0.5 size-3 shrink-0" />
                       <span>{warning}</span>
                     </div>

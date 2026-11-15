@@ -77,7 +77,7 @@ jobs:
           if (lock.packages && lock.packages[""]) lock.packages[""].version = version;
           fs.writeFileSync("frontend/package-lock.json", JSON.stringify(lock, null, 2) + "\n");
           NODE
-          echo "Building asdf GUI ${VERSION}"
+          echo "Building asdf mise GUI ${VERSION}"
 
       - name: Build AppImage
         run: wails3 task linux:create:appimage
@@ -85,7 +85,7 @@ jobs:
       - name: Verify AppImage
         run: |
           set -euo pipefail
-          APPIMAGE="$(find bin -maxdepth 1 -name 'asdf-gui-*.AppImage' -print -quit)"
+          APPIMAGE="$(find bin -maxdepth 1 -name 'asdf-mise-gui-*.AppImage' -print -quit)"
           if [ -z "$APPIMAGE" ]; then
             echo "No AppImage produced in bin/"
             ls -la bin || true
@@ -94,7 +94,7 @@ jobs:
           test -x "$APPIMAGE"
           "$APPIMAGE" --appimage-extract >/dev/null
           test -x squashfs-root/AppRun
-          test -f squashfs-root/asdf-gui.desktop
+          test -f squashfs-root/asdf-mise-gui.desktop
           rm -rf squashfs-root
           ls -lh "$APPIMAGE"
           echo "APPIMAGE=$APPIMAGE" >> "$GITHUB_ENV"
@@ -102,7 +102,7 @@ jobs:
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
-          name: asdf-gui-appimage
+          name: asdf-mise-gui-appimage
           path: bin/*.AppImage
           if-no-files-found: error
 

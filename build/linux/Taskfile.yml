@@ -170,11 +170,11 @@ tasks:
     dir: build
     cmds:
       - mkdir -p {{.ROOT_DIR}}/build/linux/appimage
-      - wails3 generate .desktop -name "asdf GUI" -genericname "Version Manager" -exec "asdf-gui" -icon "asdf-gui" -outputfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -categories "Development;" -keywords "asdf;version;toolchain;development;" -comment "Manage asdf toolchains without leaving your desktop"
+      - wails3 generate .desktop -name "asdf mise GUI" -genericname "Version Manager" -exec "asdf-mise-gui" -icon "asdf-mise-gui" -outputfile "{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop" -categories "Development;" -keywords "asdf;mise;version;toolchain;development;" -comment "Manage asdf and mise toolchains without leaving your desktop"
     vars:
       APP_NAME: '{{.APP_NAME}}'
-      EXEC: 'asdf-gui'
-      ICON: 'asdf-gui'
+      EXEC: 'asdf-mise-gui'
+      ICON: 'asdf-mise-gui'
       CATEGORIES: 'Development;'
       OUTPUTFILE: '{{.ROOT_DIR}}/build/linux/{{.APP_NAME}}.desktop'
 

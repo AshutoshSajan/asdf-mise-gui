@@ -85,7 +85,7 @@ jobs:
         run: go test -tags gtk3 -race ./internal/...
 
       - name: Build desktop binary
-        run: go build -tags gtk3 -trimpath -o /tmp/asdf-gui .
+        run: go build -tags gtk3 -trimpath -o /tmp/asdf-mise-gui .
 
   audit:
     name: Dependency and vulnerability audit

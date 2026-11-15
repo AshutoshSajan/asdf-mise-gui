@@ -200,7 +200,7 @@ func WriteFileAtomic(path string, data []byte, mode os.FileMode) error {
 	if err := os.MkdirAll(dir, 0o755); err != nil {
 		return err
 	}
-	tmp, err := os.CreateTemp(dir, ".asdf-gui-*")
+	tmp, err := os.CreateTemp(dir, ".asdf-mise-gui-*")
 	if err != nil {
 		return err
 	}

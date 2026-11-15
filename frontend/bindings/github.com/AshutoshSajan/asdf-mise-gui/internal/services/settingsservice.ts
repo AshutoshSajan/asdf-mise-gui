@@ -19,34 +19,34 @@ import * as settings$0 from "../settings/models.js";
 import * as $models from "./models.js";
 
 export function Get(): $CancellablePromise<$models.SettingsView> {
-    return $Call.ByID(3142980636);
+    return $Call.ByID(1603752979);
 }
 
 /**
- * PickBinary opens the native file picker for an asdf binary.
+ * PickBinary opens the native file picker for a version manager binary.
  */
 export function PickBinary(): $CancellablePromise<string> {
-    return $Call.ByID(4138693496);
+    return $Call.ByID(2633336689);
 }
 
 /**
- * PickDataDir opens the native folder picker for ASDF_DATA_DIR.
+ * PickDataDir opens the native folder picker for the engine data directory.
  */
 export function PickDataDir(): $CancellablePromise<string> {
-    return $Call.ByID(1564381624);
+    return $Call.ByID(816669731);
 }
 
 /**
  * PickProjectDir opens the native folder picker for the default project.
  */
 export function PickProjectDir(): $CancellablePromise<string> {
-    return $Call.ByID(1316013305);
+    return $Call.ByID(3774352088);
 }
 
 export function Reset(): $CancellablePromise<$models.SettingsView> {
-    return $Call.ByID(397093119);
+    return $Call.ByID(3774053004);
 }
 
 export function Save(next: settings$0.Settings): $CancellablePromise<$models.SettingsView> {
-    return $Call.ByID(3937842365, next);
+    return $Call.ByID(1040351028, next);
 }
