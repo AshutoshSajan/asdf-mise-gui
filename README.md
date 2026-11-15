@@ -35,7 +35,7 @@
   <img alt="React 19" src="https://img.shields.io/badge/React-19-61DAFB?style=flat-square&logo=react&logoColor=0B0D0C" />
   <img alt="TypeScript 7" src="https://img.shields.io/badge/TypeScript-7-3178C6?style=flat-square&logo=typescript&logoColor=white" />
   <img alt="Tailwind CSS 4" src="https://img.shields.io/badge/Tailwind_CSS-4-06B6D4?style=flat-square&logo=tailwindcss&logoColor=white" />
-  <img alt="macOS and Linux" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux-111111?style=flat-square" />
+  <img alt="macOS, Linux, and Windows" src="https://img.shields.io/badge/platform-macOS%20%7C%20Linux%20%7C%20Windows-111111?style=flat-square" />
   <img alt="MIT License" src="https://img.shields.io/badge/license-MIT-A3E635?style=flat-square" />
   <img alt="Status: MVP" src="https://img.shields.io/badge/status-MVP-4ADE80?style=flat-square" />
 </p>
@@ -45,7 +45,7 @@
 > **The short version.** asdf and mise are excellent at what they do. Remembering the exact incantation for every plugin is less excellent. asdf mise GUI gives both version managers a proper desktop home: installed versions, missing versions, plugin management, project pinning, and live command output — without replacing the engine underneath.
 
 > [!IMPORTANT]
-> **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf or mise CLI through typed Wails services. Linux AppImages are built automatically from version tags. Expect breaking changes before 1.0. macOS and Linux are supported. Native Windows is not supported in v1 — use the Linux build inside WSL2.
+> **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf or mise CLI through typed Wails services. Tagged releases build an AppImage, DEB/RPM/Arch packages, a universal macOS DMG, and a Windows installer. Expect breaking changes before 1.0.
 
 ## Screenshots
 
@@ -104,18 +104,56 @@ Because asdf and mise already work. This project is a **front-end, not a fork**.
 
 ## Install
 
-Grab the latest Linux AppImage from the
-[releases page](https://github.com/AshutoshSajan/asdf-mise-gui/releases):
+Every tagged release publishes native builds for Linux, macOS, and Windows on
+the [releases page](https://github.com/AshutoshSajan/asdf-mise-gui/releases).
+
+### Linux
+
+Choose the package that fits your distribution:
 
 ```bash
+# AppImage — self-updating, bundles GTK4/WebKitGTK 6.0
 chmod +x asdf-mise-gui-linux-x86_64.AppImage
 ./asdf-mise-gui-linux-x86_64.AppImage
+
+# Debian / Ubuntu
+sudo apt install ./asdf-mise-gui-linux-amd64.deb
+
+# Fedora / RHEL / AlmaLinux / Rocky
+sudo dnf install ./asdf-mise-gui-linux-x86_64.rpm
+
+# Arch Linux
+sudo pacman -U ./asdf-mise-gui-linux-x86_64.pkg.tar.zst
 ```
 
-The AppImage bundles the application and its GTK4/WebKitGTK 6.0 runtime
-libraries. It still needs [asdf](https://asdf-vm.com/guide/getting-started.html)
-or [mise](https://mise.jdx.dev/getting-started.html) on your `PATH` — the GUI
-drives your real CLI instead of shipping one.
+The DEB, RPM, and Arch packages depend on the distribution's GTK4 + WebKitGTK
+6.0 packages. Each release publishes a `checksums.txt` with SHA-256 digests for
+every asset.
+
+### macOS
+
+Download `asdf-mise-gui-darwin-universal.dmg`, open it, and drag
+**asdf-mise-gui** into Applications. The build is ad-hoc signed but not
+notarized, so Gatekeeper warns on first launch. Right-click the app and choose
+**Open**, or clear the quarantine flag:
+
+```bash
+xattr -dr com.apple.quarantine "/Applications/asdf-mise-gui.app"
+```
+
+### Windows
+
+Download `asdf-mise-gui-windows-amd64-installer.exe` and run it. The installer
+bundles the WebView2 bootstrapper. A portable
+`asdf-mise-gui-windows-amd64.exe` is published alongside it; the installer and
+the portable build are unsigned, so SmartScreen may warn on first launch.
+
+[mise](https://mise.jdx.dev/getting-started.html) is the recommended engine on
+native Windows. asdf itself is a Unix shell tool; asdf users should run the
+Linux AppImage inside WSL2, where WSLg provides the display.
+
+All builds still need the real asdf or mise CLI on `PATH` — the GUI drives your
+CLI instead of shipping one.
 
 <details>
 <summary><strong>AppImage troubleshooting</strong></summary>
@@ -149,9 +187,10 @@ restarts. A missing or mismatched checksum aborts the install and leaves the
 current AppImage untouched. Settings, projects, and asdf/mise data are not
 modified.
 
-Development binaries, macOS app bundles, and DEB/RPM packages cannot replace
+macOS, Windows, and Linux packages other than the AppImage cannot replace
 themselves. They show the same update notice but open the GitHub release page
-instead.
+instead. macOS builds are ad-hoc signed and the Windows installer is unsigned,
+so the operating system may warn on first launch.
 
 Launch checks are enabled by default and can be disabled in
 **Settings → Updates**; manual checks always work. The app's only outbound
@@ -383,7 +422,7 @@ asdf mise GUI runs local commands on your behalf, so the boundaries are delibera
 | **Concurrent writes** | Mutations run through a single FIFO queue. `.tool-versions` and settings are written atomically; mise TOML writes go through `mise use`. |
 | **Interactive prompts** | Git terminal prompts are disabled so plugin operations cannot hang waiting for credentials. |
 | **External links** | Only `http://` and `https://` URLs are opened in the system browser. |
-| **Update verification** | AppImage downloads must match a SHA-256 digest from the release's `checksums.txt`; a mismatch aborts before the running image is replaced. |
+| **Update verification** | Every release publishes SHA-256 digests for all assets in `checksums.txt`. AppImage self-update aborts unless the download matches its entry. |
 | **Privacy** | The app has no telemetry. Its only own network call is the optional GitHub Releases update check; all other network activity comes from asdf, mise, and their plugins. |
 
 Logs may contain local paths and command output. They stay on your machine.
@@ -410,9 +449,9 @@ Existing `asdf-gui` settings are imported once into the new location.
 
 | Platform | Status | Notes |
 | :-- | :-- | :-- |
-| **macOS** | Supported | Native Wails app. Packaging tasks produce `.app` and `.dmg` artifacts. |
-| **Linux** | Supported | GTK4 + WebKitGTK 6.0 by default; `gtk3` build tag available for older stacks. Tagged releases ship an AppImage. |
-| **Windows** | Not supported natively | v1 ships no Windows artifacts. Run the Linux build inside WSL2 (WSLg provides the display). |
+| **macOS** | Supported | Native Wails app. Releases ship a universal `.dmg` (arm64 + amd64). Ad-hoc signed, not notarized. |
+| **Linux** | Supported | GTK4 + WebKitGTK 6.0 by default; `gtk3` build tag available for older stacks. Releases ship AppImage, DEB, RPM, and Arch packages. |
+| **Windows** | Supported | Native Wails app with WebView2. Releases ship an NSIS installer and a portable `.exe`. mise is recommended; asdf users should use WSL2. |
 
 The runner is deliberately behind a narrow interface, leaving room for a future
 WSL bridge without changing the UI or the operation model.
@@ -425,7 +464,10 @@ task dev:gtk3        # hot-reloading desktop app (GTK3 / WebKit2GTK 4.1)
 task build           # production binary in bin/
 task build:gtk3      # production binary against GTK3
 task package         # native packages (platform-dependent)
+task linux:package   # AppImage + DEB + RPM + Arch packages
 task linux:create:appimage   # → bin/asdf-mise-gui-*.AppImage
+task darwin:package:dmg:universal  # universal macOS DMG (macOS host)
+task windows:package         # NSIS installer and portable EXE (Windows host)
 
 task test            # backend tests + frontend type-check and build
 task audit           # govulncheck + npm audit
@@ -502,31 +544,39 @@ same report without failing.
 ## Releases
 
 Releases are driven by tags. The [release workflow](./.github/workflows/release.yml)
-builds the AppImage on Ubuntu 24.04 against GTK4/WebKitGTK 6.0:
+builds every platform in parallel, then publishes one release:
+
+| Job | Runner | Assets |
+| :-- | :-- | :-- |
+| Linux | Ubuntu 24.04 | AppImage, DEB, RPM, Arch package |
+| macOS | macOS | Universal DMG (arm64 + amd64) |
+| Windows | Windows | NSIS installer and portable EXE |
+
+Pull requests that touch the release pipeline build all three platforms without
+publishing, so packaging regressions fail before a tag is cut.
 
 1. Bump every versioned file with the repository script, then commit:
 
    ```bash
-   node scripts/set-version.mjs 0.2.0
+   node scripts/set-version.mjs 0.3.0
    ```
 
 2. Tag and push:
 
    ```bash
-   git tag v0.2.0
-   git push origin v0.2.0
+   git tag v0.3.0
+   git push origin v0.3.0
    ```
 
 The workflow syncs the tag version into the build metadata with the same script,
-runs `task linux:create:appimage`, unpacks the result to verify `AppRun` and the
-desktop entry, and renames the asset to
-`asdf-mise-gui-linux-<arch>.AppImage`. It then writes `checksums.txt` with
-`sha256sum`, uploads both files as workflow artifacts, and publishes a GitHub
-release with the AppImage and checksum sidecar attached.
+builds all three platforms, verifies the AppImage, and normalizes asset names.
+A final job writes `checksums.txt` with `sha256sum` and publishes every package
+in one GitHub release.
 
-The updater resolves assets by that platform-and-architecture name. Keep the
-pattern when changing packaging, or AppImage self-update will stop finding new
-releases.
+The updater resolves the AppImage by `asdf-mise-gui-linux-<arch>.AppImage`. Keep
+that pattern when changing packaging, or AppImage self-update will stop finding
+new releases. Only the AppImage self-updates; the other assets are manual
+downloads.
 
 ## Troubleshooting
 
@@ -612,9 +662,11 @@ Trust is mise's security boundary, so asdf mise GUI does not bypass it.
 
 <br/>
 
-Native Windows is not supported in v1. Install WSL2 with a Linux distribution,
-install the Linux prerequisites inside WSL, and run the Linux build there.
-Windows 11's WSLg provides the display and audio integration.
+Native Windows builds are published from every tag. They use WebView2 (the
+NSIS installer bootstraps it) and work best with mise. asdf is a Unix shell
+tool, so if your toolchains depend on asdf, install WSL2 and run the Linux
+AppImage inside WSL. Windows 11's WSLg provides the display and audio
+integration.
 
 </details>
 
@@ -622,7 +674,6 @@ Windows 11's WSLg provides the display and audio integration.
 
 - Replacing asdf or mise version resolution with a second implementation.
 - Bundling language runtimes or hiding plugin scripts.
-- Shipping native Windows artifacts in v1.
 - Sending usage data or requiring an account.
 
 ## Roadmap
@@ -637,8 +688,9 @@ Windows 11's WSLg provides the display and audio integration.
 - [x] Tools, plugins, project, operations, and settings screens
 - [x] CI for tests, builds, vulnerability scans, and dependency audits
 - [x] Tag-driven Linux AppImage releases
+- [x] macOS DMG and Windows installer releases
 - [x] In-app update checks with verified AppImage self-update
-- [ ] Signed release artifacts for macOS and Linux
+- [ ] Signed and notarized macOS and Windows artifacts
 - [ ] WSL2 runner bridge
 - [ ] Multi-project workspaces and richer version comparisons
 

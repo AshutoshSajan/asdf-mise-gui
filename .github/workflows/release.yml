@@ -4,19 +4,37 @@ on:
   push:
     tags:
       - "v*"
+  # Build every platform on PRs that touch the release pipeline so packaging
+  # regressions are caught before a tag is cut. Publishing stays tag-only.
+  pull_request:
+    paths:
+      - ".github/workflows/release.yml"
+      - "build/config.yml"
+      - "build/darwin/**"
+      - "build/linux/**"
+      - "build/windows/**"
+      - "scripts/set-version.mjs"
+      - "internal/version/**"
   workflow_dispatch:
 
 permissions:
   contents: write
 
 concurrency:
-  group: release-${{ github.ref }}
-  cancel-in-progress: false
+  group: release-${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: ${{ github.event_name == 'pull_request' }}
+
+env:
+  GOFLAGS: -mod=readonly
 
 jobs:
-  appimage:
-    name: Build Linux AppImage
+  linux:
+    name: Linux packages
     runs-on: ubuntu-24.04
+    env:
+      # nfpm expands these when it builds DEB and RPM metadata.
+      GIT_COMMITTER_NAME: Ashutosh Sajan
+      GIT_COMMITTER_EMAIL: 44765540+AshutoshSajan@users.noreply.github.com
     steps:
       - uses: actions/checkout@v7
 
@@ -64,12 +82,13 @@ jobs:
           RELEASE_VERSION: ${{ github.ref_name }}
         run: node scripts/set-version.mjs "$RELEASE_VERSION"
 
-      - name: Build AppImage
-        run: wails3 task linux:create:appimage
+      - name: Build AppImage, DEB, RPM, and Arch packages
+        run: wails3 task linux:package
 
-      - name: Verify AppImage
+      - name: Verify and normalize assets
         run: |
           set -euo pipefail
+
           APPIMAGE="$(find bin -maxdepth 1 -name 'asdf-mise-gui-*.AppImage' -print -quit)"
           if [ -z "$APPIMAGE" ]; then
             echo "No AppImage produced in bin/"
@@ -85,31 +104,184 @@ jobs:
           # Wails' updater matcher requires both the platform and architecture
           # in the asset name. Keep this in sync with updateAssetMatcher.
           ARCH="$(uname -m)"
-          TARGET="bin/asdf-mise-gui-linux-${ARCH}.AppImage"
-          mv "$APPIMAGE" "$TARGET"
-          chmod +x "$TARGET"
+          case "$ARCH" in
+            x86_64) DEB_ARCH="amd64" ;;
+            aarch64) DEB_ARCH="arm64" ;;
+            *) DEB_ARCH="$ARCH" ;;
+          esac
 
-          (cd bin && sha256sum "$(basename "$TARGET")" > checksums.txt)
-          grep -q "asdf-mise-gui-linux-${ARCH}.AppImage" bin/checksums.txt
-          test -s bin/checksums.txt
+          mv "$APPIMAGE" "bin/asdf-mise-gui-linux-${ARCH}.AppImage"
+          chmod +x "bin/asdf-mise-gui-linux-${ARCH}.AppImage"
 
-          ls -lh "$TARGET" bin/checksums.txt
+          DEB="$(find bin -maxdepth 1 -name '*.deb' -print -quit)"
+          RPM="$(find bin -maxdepth 1 -name '*.rpm' -print -quit)"
+          ARCHPKG="$(find bin -maxdepth 1 -name '*.pkg.tar.zst' -print -quit)"
+          test -n "$DEB"
+          test -n "$RPM"
+          test -n "$ARCHPKG"
+          mv "$DEB" "bin/asdf-mise-gui-linux-${DEB_ARCH}.deb"
+          mv "$RPM" "bin/asdf-mise-gui-linux-${ARCH}.rpm"
+          mv "$ARCHPKG" "bin/asdf-mise-gui-linux-${ARCH}.pkg.tar.zst"
 
-      - name: Upload workflow artifact
+          ls -lh bin
+
+      - name: Upload Linux packages
         uses: actions/upload-artifact@v7
         with:
-          name: asdf-mise-gui-appimage
+          name: linux-packages
           path: |
             bin/*.AppImage
-            bin/checksums.txt
+            bin/*.deb
+            bin/*.rpm
+            bin/*.pkg.tar.zst
           if-no-files-found: error
 
-      - name: Publish GitHub release
+  macos:
+    name: macOS DMG
+    runs-on: macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails and Task
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          go install github.com/go-task/task/v3/cmd/task@v3.54.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Sync version with tag
         if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: node scripts/set-version.mjs "$RELEASE_VERSION"
+
+      - name: Build universal DMG
+        run: wails3 task darwin:package:dmg:universal
+
+      - name: Normalize asset
+        run: |
+          set -euo pipefail
+          DMG="$(find bin -maxdepth 1 -name '*.dmg' -print -quit)"
+          if [ -z "$DMG" ]; then
+            echo "No DMG produced in bin/"
+            ls -la bin || true
+            exit 1
+          fi
+          mv "$DMG" "bin/asdf-mise-gui-darwin-universal.dmg"
+          ls -lh bin/*.dmg
+
+      - name: Upload macOS DMG
+        uses: actions/upload-artifact@v7
+        with:
+          name: macos-dmg
+          path: bin/asdf-mise-gui-darwin-universal.dmg
+          if-no-files-found: error
+
+  windows:
+    name: Windows installer
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: bash
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-go@v7
+        with:
+          go-version-file: go.mod
+          cache: true
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: frontend/package-lock.json
+
+      - name: Install Wails and Task
+        run: |
+          go install github.com/wailsapp/wails/v3/cmd/wails3@v3.1.0
+          go install github.com/go-task/task/v3/cmd/task@v3.54.0
+          echo "$(go env GOPATH)/bin" >> "$GITHUB_PATH"
+
+      - name: Install frontend dependencies
+        run: npm ci
+        working-directory: frontend
+
+      - name: Sync version with tag
+        if: startsWith(github.ref, 'refs/tags/v')
+        env:
+          RELEASE_VERSION: ${{ github.ref_name }}
+        run: node scripts/set-version.mjs "$RELEASE_VERSION"
+
+      - name: Install NSIS
+        shell: pwsh
+        run: choco install nsis --no-progress -y
+
+      - name: Build NSIS installer
+        run: wails3 task windows:package
+
+      - name: Normalize assets
+        run: |
+          set -euo pipefail
+          INSTALLER="$(find bin -maxdepth 1 -name 'asdf-mise-gui-*-installer.exe' -print -quit)"
+          if [ -z "$INSTALLER" ]; then
+            echo "No installer produced in bin/"
+            ls -la bin || true
+            exit 1
+          fi
+          mv "$INSTALLER" "bin/asdf-mise-gui-windows-amd64-installer.exe"
+          cp "bin/asdf-mise-gui.exe" "bin/asdf-mise-gui-windows-amd64.exe"
+          ls -lh bin/*.exe
+
+      - name: Upload Windows assets
+        uses: actions/upload-artifact@v7
+        with:
+          name: windows-installer
+          path: |
+            bin/asdf-mise-gui-windows-amd64.exe
+            bin/asdf-mise-gui-windows-amd64-installer.exe
+          if-no-files-found: error
+
+  publish:
+    name: Publish GitHub release
+    if: startsWith(github.ref, 'refs/tags/v')
+    needs:
+      - linux
+      - macos
+      - windows
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/download-artifact@v7
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Generate checksums
+        run: |
+          set -euo pipefail
+          cd dist
+          rm -f checksums.txt
+          sha256sum -- * > checksums.txt
+          cat checksums.txt
+
+      - name: Publish release
         uses: softprops/action-gh-release@v3
         with:
           files: |
-            bin/*.AppImage
-            bin/checksums.txt
+            dist/*
           generate_release_notes: true
           fail_on_unmatched_files: true

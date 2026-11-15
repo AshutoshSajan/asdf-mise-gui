@@ -35,6 +35,8 @@ node scripts/set-version.mjs <semver>
 
 ## Release assets
 
-The updater matches AppImage assets by platform and architecture. Keep the
+Every tag publishes Linux packages (AppImage, DEB, RPM, Arch), a universal
+macOS DMG, and a Windows installer plus portable EXE. The updater matches the
+AppImage by platform and architecture, so keep the
 `asdf-mise-gui-linux-<arch>.AppImage` naming and the `checksums.txt` sidecar in
 `.github/workflows/release.yml`, or AppImage self-update stops working.

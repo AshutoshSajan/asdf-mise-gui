@@ -16,9 +16,10 @@ func TestVersionIsSemantic(t *testing.T) {
 }
 
 // TestBuildMetadataMatchesVersion keeps the source constant, the Wails build
-// metadata, the Linux package metadata, and the frontend package in sync.
-// Release builds re-run scripts/set-version.mjs, so local drift would only be
-// caught here before the tag is pushed.
+// metadata, the Linux package metadata, the macOS plists, the Windows resource
+// metadata, and the frontend package in sync. Release builds re-run
+// scripts/set-version.mjs, so local drift would only be caught here before the
+// tag is pushed.
 func TestBuildMetadataMatchesVersion(t *testing.T) {
 	checks := []struct {
 		path   string
@@ -56,6 +57,51 @@ func TestBuildMetadataMatchesVersion(t *testing.T) {
 	}
 	if pkg.Version != Version {
 		t.Errorf("frontend/package.json version = %q, want %q", pkg.Version, Version)
+	}
+
+	raw, err = os.ReadFile("../../build/windows/info.json")
+	if err != nil {
+		t.Fatal(err)
+	}
+	var winInfo struct {
+		Fixed struct {
+			FileVersion    string `json:"file_version"`
+			ProductVersion string `json:"product_version"`
+		} `json:"fixed"`
+		Info map[string]struct {
+			FileVersion    string `json:"FileVersion"`
+			ProductVersion string `json:"ProductVersion"`
+		} `json:"info"`
+	}
+	if err := json.Unmarshal(raw, &winInfo); err != nil {
+		t.Fatal(err)
+	}
+	if winInfo.Fixed.FileVersion != Version {
+		t.Errorf("build/windows/info.json fixed.file_version = %q, want %q", winInfo.Fixed.FileVersion, Version)
+	}
+	if winInfo.Fixed.ProductVersion != Version {
+		t.Errorf("build/windows/info.json fixed.product_version = %q, want %q", winInfo.Fixed.ProductVersion, Version)
+	}
+	for locale, info := range winInfo.Info {
+		if info.FileVersion != Version {
+			t.Errorf("build/windows/info.json %s FileVersion = %q, want %q", locale, info.FileVersion, Version)
+		}
+		if info.ProductVersion != Version {
+			t.Errorf("build/windows/info.json %s ProductVersion = %q, want %q", locale, info.ProductVersion, Version)
+		}
+	}
+
+	raw, err = os.ReadFile("../../build/windows/nsis/wails_tools.nsh")
+	if err != nil {
+		t.Fatal(err)
+	}
+	nsisPattern := regexp.MustCompile(`!define INFO_PRODUCTVERSION "([^"]+)"`)
+	match := nsisPattern.FindStringSubmatch(string(raw))
+	if len(match) != 2 {
+		t.Fatal("no INFO_PRODUCTVERSION define found in build/windows/nsis/wails_tools.nsh")
+	}
+	if match[1] != Version {
+		t.Errorf("wails_tools.nsh INFO_PRODUCTVERSION = %q, want %q", match[1], Version)
 	}
 }
 
