@@ -229,7 +229,11 @@ jobs:
 
       - name: Install NSIS
         shell: pwsh
-        run: choco install nsis --no-progress -y
+        run: |
+          choco install nsis --no-progress -y
+          # Chocolatey does not add NSIS to PATH for subsequent shells.
+          "C:\Program Files (x86)\NSIS" | Out-File -FilePath $env:GITHUB_PATH -Encoding utf8 -Append
+          & "C:\Program Files (x86)\NSIS\makensis.exe" /VERSION
 
       - name: Build NSIS installer
         run: wails3 task windows:package
