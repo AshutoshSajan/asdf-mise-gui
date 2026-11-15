@@ -1,8 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   CheckCircle2,
-  ChevronLeft,
-  ChevronRight,
   ExternalLink,
   GitBranch,
   Package,
@@ -46,8 +44,6 @@ import { ManagerService, PluginsService, type AvailablePlugin, type Plugin } fro
 import { navigate } from "../lib/route";
 
 type RemoveTarget = { name: string };
-
-const PAGE_SIZE = 50;
 
 export function Plugins() {
   const status = useStatus();
@@ -333,7 +329,6 @@ function PluginCatalog({
   const queue = useQueueOperation();
   const { toast } = useToast();
   const [query, setQuery] = useState("");
-  const [page, setPage] = useState(1);
   const [pending, setPending] = useState<string | null>(null);
 
   const installed = useMemo(() => new Set(installedNames), [installedNames]);
@@ -345,15 +340,6 @@ function PluginCatalog({
       (entry) => entry.name.toLowerCase().includes(needle) || entry.url.toLowerCase().includes(needle),
     );
   }, [catalog.data, query]);
-
-  useEffect(() => {
-    setPage(1);
-  }, [query]);
-
-  const pageCount = Math.max(1, Math.ceil(rows.length / PAGE_SIZE));
-  const currentPage = Math.min(page, pageCount);
-  const pageStart = (currentPage - 1) * PAGE_SIZE;
-  const pageRows = rows.slice(pageStart, pageStart + PAGE_SIZE);
 
   useEffect(() => {
     if (catalog.isError) {
@@ -459,7 +445,7 @@ function PluginCatalog({
       ) : (
         <Card className="overflow-hidden">
           <div className="divide-y divide-line-soft">
-            {pageRows.map((entry) => {
+            {rows.map((entry) => {
               const already = installed.has(entry.name);
               return (
                 <div
@@ -498,38 +484,9 @@ function PluginCatalog({
               );
             })}
           </div>
-          <div className="flex flex-wrap items-center justify-between gap-3 border-t border-line-soft px-4 py-2.5">
-            <span className="text-[11px] text-faint">
-              Showing {pageStart + 1}–{pageStart + pageRows.length} of {rows.length}
-              {rows.length !== (catalog.data?.length ?? 0) ? ` (${catalog.data?.length ?? 0} total)` : ""}
-            </span>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                disabled={currentPage <= 1}
-                onClick={() => setPage(currentPage - 1)}
-                aria-label="Previous registry page"
-              >
-                <ChevronLeft className="size-3.5" />
-                Previous
-              </Button>
-              <span className="min-w-24 text-center font-mono text-[10px] text-faint">
-                Page {currentPage} of {pageCount}
-              </span>
-              <Button
-                size="sm"
-                variant="ghost"
-                className="h-7"
-                disabled={currentPage >= pageCount}
-                onClick={() => setPage(currentPage + 1)}
-                aria-label="Next registry page"
-              >
-                Next
-                <ChevronRight className="size-3.5" />
-              </Button>
-            </div>
+          <div className="border-t border-line-soft px-4 py-2.5 text-[11px] text-faint">
+            Showing all {rows.length} registry {pluralize(rows.length, "plugin")}
+            {rows.length !== (catalog.data?.length ?? 0) ? ` of ${catalog.data?.length ?? 0} total` : ""}
           </div>
         </Card>
       )}
