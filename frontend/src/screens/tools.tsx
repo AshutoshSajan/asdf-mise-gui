@@ -38,7 +38,6 @@ import {
   DialogTitle,
 } from "../components/ui/dialog";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "../components/ui/select";
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -83,6 +82,11 @@ export function Tools() {
   const [installTarget, setInstallTarget] = useState<InstallTarget | null>(null);
   const [pinTarget, setPinTarget] = useState<PinTarget | null>(null);
   const [uninstallTarget, setUninstallTarget] = useState<UninstallTarget | null>(null);
+
+  const engine = status.data?.engine ?? "asdf";
+  const isMise = engine === "mise";
+  const engineName = isMise ? "mise" : "asdf";
+  const configName = isMise ? "mise config" : ".tool-versions";
 
   const latestMap = useMemo(
     () => new Map((latest.data ?? []).map((item) => [item.tool, item])),
@@ -237,13 +241,25 @@ export function Tools() {
           description={
             query || filter !== "all"
               ? "Clear the search or switch filters to see the rest of your toolchains."
-              : "Add a plugin, then install your first version. Tools appear here as soon as asdf knows about them."
+              : isMise
+                ? "Install your first version. Tools appear here as soon as mise resolves them from its registry or backends."
+                : "Add a plugin, then install your first version. Tools appear here as soon as asdf knows about them."
           }
           action={
-            <Button size="sm" variant="secondary" onClick={() => navigate("/plugins")}>
-              <Package className="size-3.5" />
-              Manage plugins
-            </Button>
+            query || filter !== "all" ? undefined : (
+              <div className="flex flex-wrap items-center justify-center gap-2">
+                <Button size="sm" variant="secondary" onClick={() => setInstallTarget({ tool: "", version: "" })}>
+                  <Download className="size-3.5" />
+                  Install a version
+                </Button>
+                {isMise ? null : (
+                  <Button size="sm" variant="ghost" onClick={() => navigate("/plugins")}>
+                    <Package className="size-3.5" />
+                    Manage plugins
+                  </Button>
+                )}
+              </div>
+            )
           }
         />
       ) : (
@@ -254,6 +270,7 @@ export function Tools() {
                 key={tool.name}
                 tool={tool}
                 latest={latestMap.get(tool.name)}
+                configName={configName}
                 onInstall={openInstall}
                 onPin={openPin}
                 onUninstall={setUninstallTarget}
@@ -271,12 +288,15 @@ export function Tools() {
         }}
         tools={tools.data ?? []}
         initial={installTarget ?? { tool: "", version: "" }}
+        engineName={engineName}
+        isMise={isMise}
       />
 
       <PinDialog
         target={pinTarget}
         onClose={() => setPinTarget(null)}
         defaultDir={status.data?.settings.defaultProjectDir ?? ""}
+        isMise={isMise}
       />
 
       <ConfirmDialog
@@ -285,7 +305,7 @@ export function Tools() {
           if (!open) setUninstallTarget(null);
         }}
         title={`Uninstall ${uninstallTarget?.tool ?? ""} ${uninstallTarget?.version ?? ""}?`}
-        description="The version is removed from the asdf data directory. Project pins are not changed."
+        description={`The version is removed from the ${engineName} data directory. Project pins are not changed.`}
         confirmLabel="Uninstall"
         destructive
         loading={queue.isPending}
@@ -306,6 +326,7 @@ export function Tools() {
 function ToolRow({
   tool,
   latest,
+  configName,
   onInstall,
   onPin,
   onUninstall,
@@ -313,6 +334,7 @@ function ToolRow({
 }: {
   tool: ToolView;
   latest?: { version: string; installed: boolean; known: boolean };
+  configName: string;
   onInstall: (tool?: ToolView, version?: string) => void;
   onPin: (tool: string, version: string, scope: "global" | "local", versions: string[]) => void;
   onUninstall: (target: UninstallTarget) => void;
@@ -462,7 +484,7 @@ function ToolRow({
 
       {unset && installed.length > 0 ? (
         <div className="mt-2 pl-12 text-[11px] text-faint">
-          Installed but not selected by any <span className="font-mono">.tool-versions</span> file.
+          Installed but not selected by any <span className="font-mono">{configName}</span> file.
         </div>
       ) : null}
     </div>
@@ -507,26 +529,39 @@ function InstallDialog({
   onOpenChange,
   tools,
   initial,
+  engineName,
+  isMise,
 }: {
   open: boolean;
   onOpenChange: (open: boolean) => void;
   tools: ToolView[];
   initial: InstallTarget;
+  engineName: string;
+  isMise: boolean;
 }) {
   const queue = useQueueOperation();
   const [tool, setTool] = useState(initial.tool);
   const [version, setVersion] = useState(initial.version);
   const [versionQuery, setVersionQuery] = useState("");
-  const available = useAvailableVersions(tool || null);
+  // Free-text tool names stay responsive while still debouncing registry
+  // lookups, which may hit the network for every keystroke.
+  const [availableFor, setAvailableFor] = useState(initial.tool.trim());
+  const available = useAvailableVersions(availableFor || null);
 
   useEffect(() => {
     if (!open) return;
     setTool(initial.tool);
     setVersion(initial.version);
     setVersionQuery("");
+    setAvailableFor(initial.tool.trim());
     // The dialog is intentionally reset on each open, not on every parent render.
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open]);
+
+  useEffect(() => {
+    const timer = window.setTimeout(() => setAvailableFor(tool.trim()), 400);
+    return () => window.clearTimeout(timer);
+  }, [tool]);
 
   const versions = useMemo(() => {
     const all = [...(available.data ?? [])].reverse();
@@ -542,34 +577,36 @@ function InstallDialog({
         <DialogHeader>
           <DialogTitle>Install a tool version</DialogTitle>
           <DialogDescription>
-            Choose an installed plugin and a version. The install is queued behind any other running asdf mutation.
+            Choose a tool and a version. The install is queued behind any other running {engineName} mutation.
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
           <div className="grid gap-4 sm:grid-cols-[minmax(0,180px)_minmax(0,1fr)]">
             <div>
               <Label>Tool</Label>
-              <Select
-                value={tool || undefined}
-                onValueChange={(value) => {
-                  setTool(value);
+              <Input
+                value={tool}
+                onChange={(event) => {
+                  setTool(event.target.value);
                   setVersion("");
                   setVersionQuery("");
                 }}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Choose a tool" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tools.map((item) => (
-                    <SelectItem key={item.name} value={item.name}>
-                      {item.name}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+                placeholder={isMise ? "e.g. node, python, terraform" : "Choose or type a tool"}
+                list="install-tool-names"
+                className="font-mono"
+                autoFocus
+              />
+              <datalist id="install-tool-names">
+                {tools.map((item) => (
+                  <option key={item.name} value={item.name} />
+                ))}
+              </datalist>
               <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
-                Plugins are managed on the <button className="text-muted underline underline-offset-2 hover:text-ink" onClick={() => onOpenChange(false)}>Plugins</button> screen.
+                {isMise
+                  ? "Type any tool in mise's registry or backends; an installed plugin is not required. Custom plugins are managed on the "
+                  : "Type a tool name, or pick one you already use. Plugins are managed on the "}
+                <button className="text-muted underline underline-offset-2 hover:text-ink" onClick={() => onOpenChange(false)}>Plugins</button>{" "}
+                screen.
               </p>
             </div>
             <div>
@@ -618,7 +655,7 @@ function InstallDialog({
                   <p className="px-3 py-4 text-xs leading-relaxed text-danger">{errorMessage(available.error)}</p>
                 ) : versions.length === 0 ? (
                   <p className="px-3 py-4 text-xs text-faint">
-                    {versionQuery ? "No versions match this filter." : "No versions were reported by the plugin."}
+                    {versionQuery ? "No versions match this filter." : `No versions were reported by ${isMise ? "mise" : "the plugin"}.`}
                   </p>
                 ) : (
                   versions.slice(0, 200).map((item) => (
@@ -673,16 +710,24 @@ function PinDialog({
   target,
   onClose,
   defaultDir,
+  isMise,
 }: {
   target: PinTarget | null;
   onClose: () => void;
   defaultDir: string;
+  isMise: boolean;
 }) {
+  const status = useStatus();
   const queue = useQueueOperation();
   const { toast } = useToast();
   const [version, setVersion] = useState("");
   const [scope, setScope] = useState<"global" | "local">("global");
   const [dir, setDir] = useState(defaultDir);
+  const globalConfigPath = isMise
+    ? status.data?.configFile
+      ? shortenPath(status.data.configFile, 40)
+      : "mise global config"
+    : "~/.tool-versions";
 
   useEffect(() => {
     if (!target) return;
@@ -713,8 +758,18 @@ function PinDialog({
             Pin <span className="font-mono">{target?.tool}</span>
           </DialogTitle>
           <DialogDescription>
-            Global pins live in <span className="font-mono">~/.tool-versions</span>. Local pins write to the selected
-            project's <span className="font-mono">.tool-versions</span>.
+            {isMise ? (
+              <>
+                Global pins live in <span className="font-mono">{globalConfigPath}</span>. Local pins run{" "}
+                <span className="font-mono">mise use</span> against the selected project, which keeps TOML formatting
+                and install state authoritative.
+              </>
+            ) : (
+              <>
+                Global pins live in <span className="font-mono">~/.tool-versions</span>. Local pins write to the selected
+                project's <span className="font-mono">.tool-versions</span>.
+              </>
+            )}
           </DialogDescription>
         </DialogHeader>
         <DialogBody>
@@ -747,7 +802,9 @@ function PinDialog({
                 <span className={cn("block text-[12px] font-medium", scope === "global" ? "text-accent" : "text-ink")}>
                   Global
                 </span>
-                <span className="mt-0.5 block font-mono text-[10px] text-faint">~/.tool-versions</span>
+                <span className="mt-0.5 block truncate font-mono text-[10px] text-faint" title={status.data?.configFile}>
+                  {globalConfigPath}
+                </span>
               </button>
               <button
                 onClick={() => setScope("local")}
@@ -761,7 +818,9 @@ function PinDialog({
                 <span className={cn("block text-[12px] font-medium", scope === "local" ? "text-accent" : "text-ink")}>
                   Project
                 </span>
-                <span className="mt-0.5 block font-mono text-[10px] text-faint">.tool-versions</span>
+                <span className="mt-0.5 block font-mono text-[10px] text-faint">
+                  {isMise ? "mise.toml" : ".tool-versions"}
+                </span>
               </button>
             </div>
           </div>

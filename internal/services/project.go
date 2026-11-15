@@ -9,13 +9,14 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/ops"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/ops"
 	"github.com/wailsapp/wails/v3/pkg/application"
 )
 
-// ProjectService reads and edits .tool-versions files.
+// ProjectService reads and edits project config files. asdf projects use
+// .tool-versions; mise projects use mise.toml and keep .tool-versions support.
 type ProjectService struct {
 	rt    *core.Runtime
 	tools *ToolsService
@@ -30,14 +31,17 @@ type RecentProject struct {
 	Name            string `json:"name"`
 	Exists          bool   `json:"exists"`
 	HasToolVersions bool   `json:"hasToolVersions"`
+	ConfigFile      string `json:"configFile"`
 }
 
 type ProjectView struct {
 	Dir            string                  `json:"dir"`
+	Engine         string                  `json:"engine"`
 	FilePath       string                  `json:"filePath"`
 	FileExists     bool                    `json:"fileExists"`
 	FileInProject  bool                    `json:"fileInProject"`
 	UsingParent    bool                    `json:"usingParent"`
+	ConfigFormat   string                  `json:"configFormat"`
 	Entries        []asdf.ToolVersionEntry `json:"entries"`
 	GlobalFilePath string                  `json:"globalFilePath"`
 	GlobalExists   bool                    `json:"globalExists"`
@@ -48,10 +52,12 @@ type ProjectView struct {
 	Recent         []RecentProject         `json:"recent"`
 	Warnings       []string                `json:"warnings"`
 	LoadedAt       string                  `json:"loadedAt"`
+	Queued         bool                    `json:"queued"`
+	Operation      *ops.Operation          `json:"operation,omitempty"`
 }
 
-// Open resolves a directory, its nearest .tool-versions file, and asdf's
-// current view in that directory. remember adds it to the recent list.
+// Open resolves a directory, its nearest config file, and the engine's current
+// view in that directory. remember adds it to the recent list.
 func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 	resolved, err := s.resolveDir(dir)
 	if err != nil {
@@ -61,22 +67,77 @@ func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 		_ = s.rt.SettingsStore().AddRecentProject(resolved)
 	}
 
+	engine := s.rt.Engine()
 	view := ProjectView{
-		Dir:            resolved,
-		GlobalFilePath: filepath.Join(homeDir(), asdf.ToolVersionsFilename),
-		Entries:        []asdf.ToolVersionEntry{},
-		GlobalEntries:  []asdf.ToolVersionEntry{},
-		Current:        []asdf.CurrentTool{},
-		Missing:        []string{},
-		Plugins:        []string{},
-		Warnings:       []string{},
-		LoadedAt:       time.Now().UTC().Format(time.RFC3339),
+		Dir:      resolved,
+		Engine:   engine,
+		Entries:  []asdf.ToolVersionEntry{},
+		Current:  []asdf.CurrentTool{},
+		Missing:  []string{},
+		Plugins:  []string{},
+		Warnings: []string{},
+		LoadedAt: time.Now().UTC().Format(time.RFC3339),
 	}
+
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	if engine == asdf.EngineMise {
+		s.openMise(ctx, resolved, &view)
+	} else {
+		s.openASDF(resolved, &view)
+	}
+
+	if current, runErr := s.rt.Current(ctx, resolved); runErr == nil {
+		view.Current = current
+	}
+	if plugins, runErr := s.rt.PluginNames(ctx, resolved); runErr == nil {
+		view.Plugins = plugins
+	}
+
+	view.Missing = missingTools(view.Current)
+
+	if engine == asdf.EngineASDF {
+		pluginSet := map[string]bool{}
+		for _, plugin := range view.Plugins {
+			pluginSet[plugin] = true
+		}
+		var missingPlugins []string
+		for _, entry := range view.Entries {
+			if !pluginSet[entry.Tool] {
+				missingPlugins = append(missingPlugins, entry.Tool)
+			}
+		}
+		if len(missingPlugins) > 0 {
+			view.Warnings = append(view.Warnings, fmt.Sprintf("No plugin installed for: %s", strings.Join(uniqueSorted(missingPlugins), ", ")))
+		}
+	}
+	if !view.FileExists {
+		if engine == asdf.EngineMise {
+			view.Warnings = append(view.Warnings, "This directory has no mise config file yet.")
+		} else {
+			view.Warnings = append(view.Warnings, "This directory has no .tool-versions file yet.")
+		}
+	}
+	if view.UsingParent {
+		view.Warnings = append(view.Warnings, fmt.Sprintf("Using the nearest config file in a parent directory: %s", view.FilePath))
+	}
+	if !s.rt.Detection().Found {
+		view.Warnings = append(view.Warnings, fmt.Sprintf("%s is not available, so current versions could not be resolved.", engine))
+	}
+	view.Recent = s.Recent()
+	return view, nil
+}
+
+func (s *ProjectService) openASDF(resolved string, view *ProjectView) {
+	view.ConfigFormat = "tool-versions"
+	view.GlobalFilePath = filepath.Join(homeDir(), asdf.ToolVersionsFilename)
 
 	ownPath := filepath.Join(resolved, asdf.ToolVersionsFilename)
 	ownFile, err := asdf.ReadToolVersions(ownPath)
 	if err != nil {
-		return ProjectView{}, err
+		view.Warnings = append(view.Warnings, err.Error())
+		return
 	}
 	effectivePath := ownPath
 	effectiveFile := ownFile
@@ -87,7 +148,8 @@ func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 		effectivePath = nearest
 		effectiveFile, err = asdf.ReadToolVersions(nearest)
 		if err != nil {
-			return ProjectView{}, err
+			view.Warnings = append(view.Warnings, err.Error())
+			return
 		}
 	}
 	view.FilePath = effectivePath
@@ -104,83 +166,186 @@ func (s *ProjectService) Open(dir string, remember bool) (ProjectView, error) {
 			view.GlobalEntries = []asdf.ToolVersionEntry{}
 		}
 	}
-
-	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-	defer cancel()
-	if result, runErr := s.rt.Run(ctx, resolved, "current", "--no-header"); runErr == nil {
-		view.Current = asdf.ParseCurrent(result.Stdout)
-	}
-	if result, runErr := s.rt.Run(ctx, resolved, "plugin", "list"); runErr == nil {
-		view.Plugins = asdf.ParsePluginNames(result.Stdout)
-	}
-
-	view.Missing = missingTools(view.Current)
-
-	pluginSet := map[string]bool{}
-	for _, plugin := range view.Plugins {
-		pluginSet[plugin] = true
-	}
-	var missingPlugins []string
-	for _, entry := range view.Entries {
-		if !pluginSet[entry.Tool] {
-			missingPlugins = append(missingPlugins, entry.Tool)
-		}
-	}
-	if len(missingPlugins) > 0 {
-		view.Warnings = append(view.Warnings, fmt.Sprintf("No plugin installed for: %s", strings.Join(uniqueSorted(missingPlugins), ", ")))
-	}
-	if !view.FileExists {
-		view.Warnings = append(view.Warnings, "This directory has no .tool-versions file yet.")
-	}
-	if view.UsingParent {
-		view.Warnings = append(view.Warnings, fmt.Sprintf("Using the nearest file in a parent directory: %s", view.FilePath))
-	}
-	if !s.rt.Detection().Found {
-		view.Warnings = append(view.Warnings, "asdf is not available, so current versions could not be resolved.")
-	}
-	view.Recent = s.Recent()
-	return view, nil
 }
 
-// Save rewrites the project's own .tool-versions file (never a parent file).
+func (s *ProjectService) openMise(ctx context.Context, resolved string, view *ProjectView) {
+	view.ConfigFormat = "toml"
+	view.GlobalFilePath = asdf.MiseGlobalConfigPath()
+
+	localPath, localFound := asdf.MiseLocalConfigPath(resolved)
+	effectivePath, effectiveFound := asdf.MiseEffectiveConfigPath(resolved)
+	if localFound {
+		view.FileInProject = true
+		view.FilePath = localPath
+	} else if effectiveFound {
+		view.UsingParent = true
+		view.FilePath = effectivePath
+	} else {
+		view.FilePath = asdf.MiseWriteTarget(resolved)
+	}
+	view.FileExists = effectiveFound
+	if asdf.ReadsMiseToolVersions(view.FilePath) {
+		view.ConfigFormat = "tool-versions"
+	}
+
+	list, listErr := s.rt.MiseList(ctx, resolved)
+	if listErr != nil {
+		view.Warnings = append(view.Warnings, fmt.Sprintf("mise could not read the project config: %s", listErr))
+	}
+
+	if view.FileExists {
+		if view.ConfigFormat == "tool-versions" {
+			file, err := asdf.ReadToolVersions(view.FilePath)
+			if err != nil {
+				view.Warnings = append(view.Warnings, err.Error())
+			} else {
+				view.Entries = file.Entries
+			}
+		} else {
+			view.Entries = asdf.MiseEntriesForSource(list, view.FilePath)
+			if len(view.Entries) == 0 {
+				entries, err := asdf.ReadMiseToolsTOML(view.FilePath)
+				if err != nil {
+					view.Warnings = append(view.Warnings, err.Error())
+				} else {
+					view.Entries = entries
+				}
+			}
+		}
+	}
+	if view.Entries == nil {
+		view.Entries = []asdf.ToolVersionEntry{}
+	}
+
+	if view.GlobalFilePath != "" {
+		if _, err := os.Stat(view.GlobalFilePath); err == nil {
+			view.GlobalExists = true
+		}
+		view.GlobalEntries = asdf.MiseEntriesForSource(list, view.GlobalFilePath)
+		if len(view.GlobalEntries) == 0 && view.GlobalExists {
+			if entries, err := asdf.ReadMiseToolsTOML(view.GlobalFilePath); err == nil {
+				view.GlobalEntries = entries
+			}
+		}
+		if view.GlobalEntries == nil {
+			view.GlobalEntries = []asdf.ToolVersionEntry{}
+		}
+	}
+}
+
+// Save rewrites a project config. asdf and .tool-versions files are edited as
+// text, preserving comments and ordering. mise TOML files are written by
+// queued `mise use` commands so the CLI remains the source of truth for its
+// format.
 func (s *ProjectService) Save(dir string, entries []asdf.ToolVersionEntry) (ProjectView, error) {
 	resolved, err := s.resolveDir(dir)
 	if err != nil {
 		return ProjectView{}, err
 	}
+	clean, err := cleanEntries(entries)
+	if err != nil {
+		return ProjectView{}, err
+	}
+
+	target := filepath.Join(resolved, asdf.ToolVersionsFilename)
+	if s.rt.IsMise() {
+		target = asdf.MiseWriteTarget(resolved)
+	}
+	if !s.rt.IsMise() || asdf.ReadsMiseToolVersions(target) {
+		file, err := asdf.ReadToolVersions(target)
+		if err != nil {
+			return ProjectView{}, err
+		}
+		file.ReplaceEntries(clean)
+		if err := file.Write(); err != nil {
+			return ProjectView{}, err
+		}
+		_ = s.rt.SettingsStore().AddRecentProject(resolved)
+		return s.Open(resolved, false)
+	}
+
+	return s.saveMiseTOML(resolved, target, clean)
+}
+
+func (s *ProjectService) saveMiseTOML(resolved, target string, entries []asdf.ToolVersionEntry) (ProjectView, error) {
+	current, err := asdf.ReadMiseToolsTOML(target)
+	if err != nil {
+		return ProjectView{}, err
+	}
+	desired := make(map[string]*asdf.ToolVersionEntry, len(entries))
+	for index := range entries {
+		desired[entries[index].Tool] = &entries[index]
+	}
+
+	var steps []ops.Step
+	for _, existing := range current {
+		if _, keep := desired[existing.Tool]; keep {
+			continue
+		}
+		steps = append(steps, ops.Step{Args: []string{"use", "--path", target, "--remove", existing.Tool}})
+	}
+	if len(entries) > 0 {
+		args := []string{"use", "--path", target}
+		for _, entry := range entries {
+			for _, version := range entry.Versions {
+				args = append(args, entry.Tool+"@"+version)
+			}
+		}
+		steps = append(steps, ops.Step{Args: args})
+	}
+
+	view, err := s.Open(resolved, false)
+	if err != nil {
+		return ProjectView{}, err
+	}
+	view.FilePath = target
+	view.FileInProject = true
+	view.UsingParent = false
+	view.ConfigFormat = "toml"
+	view.Entries = entries
+	if len(steps) == 0 {
+		return view, nil
+	}
+
+	operation, err := s.rt.Queue().Enqueue(ops.Request{
+		Kind:  "project-save",
+		Title: fmt.Sprintf("Save %s", filepath.Base(target)),
+		Dir:   resolved,
+		Steps: steps,
+	})
+	if err != nil {
+		return ProjectView{}, err
+	}
+	_ = s.rt.SettingsStore().AddRecentProject(resolved)
+	view.FileExists = true
+	view.Queued = true
+	view.Operation = &operation
+	return view, nil
+}
+
+func cleanEntries(entries []asdf.ToolVersionEntry) ([]asdf.ToolVersionEntry, error) {
 	seen := map[string]bool{}
 	clean := make([]asdf.ToolVersionEntry, 0, len(entries))
 	for _, entry := range entries {
 		tool := strings.TrimSpace(entry.Tool)
 		if err := asdf.ValidateName("tool", tool); err != nil {
-			return ProjectView{}, err
+			return nil, err
 		}
 		if seen[tool] {
-			return ProjectView{}, fmt.Errorf("tool %q appears more than once", tool)
+			return nil, fmt.Errorf("tool %q appears more than once", tool)
 		}
 		seen[tool] = true
 		if len(entry.Versions) == 0 {
-			return ProjectView{}, fmt.Errorf("tool %q has no version", tool)
+			return nil, fmt.Errorf("tool %q has no version", tool)
 		}
 		for _, version := range entry.Versions {
 			if err := asdf.ValidateVersion(version); err != nil {
-				return ProjectView{}, err
+				return nil, err
 			}
 		}
 		clean = append(clean, asdf.ToolVersionEntry{Tool: tool, Versions: entry.Versions})
 	}
-
-	path := filepath.Join(resolved, asdf.ToolVersionsFilename)
-	file, err := asdf.ReadToolVersions(path)
-	if err != nil {
-		return ProjectView{}, err
-	}
-	file.ReplaceEntries(clean)
-	if err := file.Write(); err != nil {
-		return ProjectView{}, err
-	}
-	_ = s.rt.SettingsStore().AddRecentProject(resolved)
-	return s.Open(resolved, false)
+	return clean, nil
 }
 
 // ChooseDirectory opens the native folder picker.
@@ -215,17 +380,25 @@ func (s *ProjectService) Recent() []RecentProject {
 	for _, path := range projects {
 		info, err := os.Stat(path)
 		exists := err == nil && info.IsDir()
-		hasFile := false
+		configFile := ""
 		if exists {
-			if _, err := os.Stat(filepath.Join(path, asdf.ToolVersionsFilename)); err == nil {
-				hasFile = true
+			if s.rt.IsMise() {
+				if candidate, found := asdf.MiseEffectiveConfigPath(path); found {
+					configFile = candidate
+				}
+			} else {
+				candidate := filepath.Join(path, asdf.ToolVersionsFilename)
+				if _, statErr := os.Stat(candidate); statErr == nil {
+					configFile = candidate
+				}
 			}
 		}
 		out = append(out, RecentProject{
 			Path:            path,
 			Name:            filepath.Base(path),
 			Exists:          exists,
-			HasToolVersions: hasFile,
+			HasToolVersions: configFile != "",
+			ConfigFile:      configFile,
 		})
 	}
 	return out

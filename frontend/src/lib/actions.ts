@@ -8,7 +8,7 @@ type QueueInput = {
   run: () => Promise<Operation>;
 };
 
-// useQueueOperation centralizes optimistic feedback for every asdf mutation.
+// useQueueOperation centralizes optimistic feedback for every engine mutation.
 // The queue itself is the source of truth; this only surfaces "queued" early so
 // the UI feels responsive before the operation actually starts.
 export function useQueueOperation() {

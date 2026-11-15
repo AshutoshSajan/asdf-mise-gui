@@ -8,12 +8,12 @@ import (
 	"strings"
 	"time"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
-	"github.com/AshutoshSajan/asdf-gui/internal/core"
-	"github.com/AshutoshSajan/asdf-gui/internal/ops"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/core"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/ops"
 )
 
-// PluginsService manages asdf plugins.
+// PluginsService manages engine plugins.
 type PluginsService struct {
 	rt *core.Runtime
 }
@@ -25,11 +25,7 @@ func NewPluginsService(rt *core.Runtime) *PluginsService {
 func (s *PluginsService) List() ([]asdf.Plugin, error) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
-	result, err := s.rt.Run(ctx, homeDir(), "plugin", "list", "--urls", "--refs")
-	if err != nil {
-		return nil, err
-	}
-	return asdf.ParsePluginList(result.Stdout), nil
+	return s.rt.Plugins(ctx, homeDir())
 }
 
 func (s *PluginsService) Available() ([]asdf.AvailablePlugin, error) {
@@ -51,6 +47,9 @@ func (s *PluginsService) Add(name, url string) (ops.Operation, error) {
 		return ops.Operation{}, err
 	}
 	args := []string{"plugin", "add", name}
+	if s.rt.IsMise() {
+		args = []string{"plugins", "install", name}
+	}
 	if url != "" {
 		args = append(args, url)
 	}
@@ -66,16 +65,23 @@ func (s *PluginsService) Remove(name string) (ops.Operation, error) {
 	if err := asdf.ValidateName("plugin", name); err != nil {
 		return ops.Operation{}, err
 	}
+	args := []string{"plugin", "remove", name}
+	if s.rt.IsMise() {
+		args = []string{"plugins", "uninstall", name}
+	}
 	return s.rt.Queue().Enqueue(ops.Request{
 		Kind:  "plugin-remove",
 		Title: fmt.Sprintf("Remove plugin %s", name),
 		Dir:   homeDir(),
-		Args:  []string{"plugin", "remove", name},
+		Args:  args,
 	})
 }
 
 func (s *PluginsService) Update(name string) (ops.Operation, error) {
 	args := []string{"plugin", "update"}
+	if s.rt.IsMise() {
+		args = []string{"plugins", "update"}
+	}
 	title := "Update all plugins"
 	if strings.TrimSpace(name) != "" {
 		if err := asdf.ValidateName("plugin", name); err != nil {
@@ -96,6 +102,8 @@ func inferPluginName(rawURL string) string {
 	trimmed := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSpace(rawURL), "/"), ".git")
 	base := filepath.Base(trimmed)
 	base = strings.TrimPrefix(base, "asdf-")
+	base = strings.TrimPrefix(base, "mise-")
+	base = strings.TrimPrefix(base, "vfox-")
 	if base == "." || base == "/" || base == "" {
 		return ""
 	}

@@ -29,6 +29,8 @@ export function Sidebar() {
     (operation) =>
       operation.status === "queued" || operation.status === "running" || operation.status === "canceling",
   ).length;
+  const detection = status.data?.detection;
+  const engine = status.data?.engine || detection?.engine || "asdf";
 
   return (
     <aside className="flex w-[228px] shrink-0 flex-col border-r border-line bg-surface/60">
@@ -36,7 +38,7 @@ export function Sidebar() {
         <LogoMark className="size-8 shrink-0" />
         <div className="leading-none">
           <div className="flex items-baseline gap-1.5">
-            <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">asdf</span>
+            <span className="text-[15px] font-semibold tracking-[-0.02em] text-ink">asdf mise</span>
             <span className="rounded bg-elevated px-1.5 py-0.5 text-[9px] font-bold uppercase tracking-[0.12em] text-muted">
               GUI
             </span>
@@ -91,7 +93,7 @@ export function Sidebar() {
           </div>
           <div className="mt-2 flex items-center gap-2">
             <span className="font-mono text-[12px] text-ink">
-              {status.data?.detection.found ? status.data.detection.version || "asdf" : "asdf missing"}
+              {detection?.found ? `${engine} ${detection.version || ""}`.trim() : `${engine} missing`}
             </span>
             {status.data?.detection.source ? (
               <Badge variant="outline" className="px-1.5 py-0 text-[9px] uppercase tracking-wide">

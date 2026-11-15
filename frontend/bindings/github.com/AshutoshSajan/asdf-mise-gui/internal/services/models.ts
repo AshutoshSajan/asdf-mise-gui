@@ -6,6 +6,9 @@
 import * as asdf$0 from "../asdf/models.js";
 // eslint-disable-next-line @typescript-eslint/ban-ts-comment
 // @ts-ignore: Unused imports
+import * as ops$0 from "../ops/models.js";
+// eslint-disable-next-line @typescript-eslint/ban-ts-comment
+// @ts-ignore: Unused imports
 import * as settings$0 from "../settings/models.js";
 
 export interface Check {
@@ -20,11 +23,12 @@ export interface Check {
 
 export interface Diagnostics {
     "detection": asdf$0.Detection;
+    "engine": string;
     "environment": string;
     "wsl": boolean;
     "os": string;
     "arch": string;
-    "asdfInfo": string;
+    "engineInfo": string;
     "bashVersion": string;
     "gitVersion": string;
     "shell": string;
@@ -37,10 +41,12 @@ export interface Diagnostics {
 
 export interface ProjectView {
     "dir": string;
+    "engine": string;
     "filePath": string;
     "fileExists": boolean;
     "fileInProject": boolean;
     "usingParent": boolean;
+    "configFormat": string;
     "entries": asdf$0.ToolVersionEntry[] | null;
     "globalFilePath": string;
     "globalExists": boolean;
@@ -51,6 +57,8 @@ export interface ProjectView {
     "recent": RecentProject[] | null;
     "warnings": string[] | null;
     "loadedAt": string;
+    "queued": boolean;
+    "operation"?: ops$0.Operation | null;
 }
 
 export interface RecentProject {
@@ -58,6 +66,7 @@ export interface RecentProject {
     "name": string;
     "exists": boolean;
     "hasToolVersions": boolean;
+    "configFile": string;
 }
 
 export interface SettingsView {
@@ -71,6 +80,7 @@ export interface SettingsView {
 export interface Status {
     "detection": asdf$0.Detection;
     "settings": settings$0.Settings;
+    "engine": string;
     "os": string;
     "arch": string;
     "environment": string;
@@ -80,7 +90,7 @@ export interface Status {
     "versionCount": number;
     "logsDir": string;
     "settingsPath": string;
-    "asdfConfigFile": string;
+    "configFile": string;
     "needsSetup": boolean;
     "queuePending": number;
 }

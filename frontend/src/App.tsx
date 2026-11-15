@@ -10,6 +10,7 @@ import {
 } from "./lib/bindings";
 import { useInvalidateAppData, useStatus } from "./lib/query";
 import { useRoute } from "./lib/route";
+import { applyTheme, normalizeTheme, readStoredTheme } from "./lib/theme";
 import { Sidebar } from "./components/shell/sidebar";
 import { Topbar } from "./components/shell/topbar";
 import { StatusBar } from "./components/shell/status-bar";
@@ -47,21 +48,10 @@ function Shell() {
   const { toast } = useToast();
   const timer = useRef<number | undefined>(undefined);
 
-  const theme = status.data?.settings.theme ?? "dark";
+  const theme = normalizeTheme(status.data?.settings.theme ?? readStoredTheme());
 
   useEffect(() => {
-    const root = document.documentElement;
-    const media = window.matchMedia("(prefers-color-scheme: dark)");
-    const apply = () => {
-      const dark = theme === "dark" || (theme === "system" && media.matches);
-      root.classList.toggle("dark", dark);
-      root.classList.toggle("light", !dark);
-    };
-    apply();
-    if (theme === "system") {
-      media.addEventListener("change", apply);
-      return () => media.removeEventListener("change", apply);
-    }
+    applyTheme(theme);
   }, [theme]);
 
   useEffect(() => {
@@ -104,7 +94,7 @@ function Shell() {
     };
   }, [invalidate, toast]);
 
-  const title = TITLES[route.path] ?? "asdf GUI";
+  const title = TITLES[route.path] ?? "asdf mise GUI";
   const page = (() => {
     switch (route.path) {
       case "/tools":

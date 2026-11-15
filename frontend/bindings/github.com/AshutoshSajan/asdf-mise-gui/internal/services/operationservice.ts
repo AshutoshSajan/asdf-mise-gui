@@ -15,29 +15,29 @@ import { Call as $Call, CancellablePromise as $CancellablePromise } from "@wails
 import * as ops$0 from "../ops/models.js";
 
 export function Cancel(id: string): $CancellablePromise<ops$0.Operation> {
-    return $Call.ByID(249844898, id);
+    return $Call.ByID(2635211857, id);
 }
 
 export function ClearFinished(): $CancellablePromise<number> {
-    return $Call.ByID(1653283795);
+    return $Call.ByID(1389738870);
 }
 
 export function Get(id: string): $CancellablePromise<ops$0.Detail> {
-    return $Call.ByID(3815084436, id);
+    return $Call.ByID(885140353, id);
 }
 
 export function List(): $CancellablePromise<ops$0.Operation[] | null> {
-    return $Call.ByID(2360557040);
+    return $Call.ByID(376189087);
 }
 
 export function OpenLog(id: string): $CancellablePromise<void> {
-    return $Call.ByID(3297575506, id);
+    return $Call.ByID(1703062667, id);
 }
 
 export function OpenLogsDir(): $CancellablePromise<void> {
-    return $Call.ByID(226269746);
+    return $Call.ByID(3331535039);
 }
 
 export function RunningCount(): $CancellablePromise<number> {
-    return $Call.ByID(1491937006);
+    return $Call.ByID(253524565);
 }

@@ -6,11 +6,11 @@ version: '3'
 # This information is used to generate the build assets.
 info:
   companyName: "Ashutosh Sajan" # The name of the company
-  productName: "asdf-gui" # The name of the application
-  productIdentifier: "io.github.ashutoshsajan.asdfgui" # The unique product identifier
-  description: "A native desktop GUI for the asdf version manager" # The application description
+  productName: "asdf-mise-gui" # The name of the application
+  productIdentifier: "io.github.ashutoshsajan.asdfmisegui" # The unique product identifier
+  description: "A native desktop GUI for asdf and mise" # The application description
   copyright: "(c) 2026, Ashutosh Sajan" # Copyright text
-  comments: "Drive the real asdf CLI from a fast, native desktop app." # Comments
+  comments: "Drive the real asdf or mise CLI from a fast, native desktop app." # Comments
   version: "0.1.0" # The application version
   # cfBundleIconName: "appicon" # The macOS icon name in Assets.car icon bundles (optional)
   #                               # Should match the name of your .icon file without the extension

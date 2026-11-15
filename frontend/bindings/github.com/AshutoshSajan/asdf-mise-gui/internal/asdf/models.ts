@@ -22,10 +22,11 @@ export interface CurrentTool {
 }
 
 /**
- * Detection describes the asdf installation the app will drive.
+ * Detection describes the version manager the app will drive.
  */
 export interface Detection {
     "found": boolean;
+    "engine": string;
     "binaryPath": string;
     "dataDir": string;
     "version": string;

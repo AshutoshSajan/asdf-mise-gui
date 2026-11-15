@@ -1,4 +1,4 @@
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import {
   AlertTriangle,
   CheckCircle2,
@@ -27,19 +27,25 @@ import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { useToast } from "../components/ui/toast";
 import { useDiagnostics, useInvalidateAppData, useSettings, useStatus, queryKeys } from "../lib/query";
 import { errorMessage, shortenPath, statusLabel } from "../lib/format";
+import { applyTheme, normalizeTheme, readStoredTheme, type Theme } from "../lib/theme";
 import { cn } from "../lib/utils";
 import {
   ManagerService,
   SettingsService,
+  type ManagerStatus,
   type Settings as SettingsModel,
 } from "../lib/bindings";
-
-type Theme = "system" | "light" | "dark";
 
 const THEMES: { value: Theme; label: string; icon: typeof Sun; hint: string }[] = [
   { value: "system", label: "System", icon: Monitor, hint: "Follow the desktop appearance" },
   { value: "dark", label: "Dark", icon: Moon, hint: "Always use the dark palette" },
   { value: "light", label: "Light", icon: Sun, hint: "Always use the light palette" },
+];
+
+const ENGINES: { value: "auto" | "asdf" | "mise"; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "Prefer asdf, then mise" },
+  { value: "asdf", label: "asdf", hint: "Drive the asdf CLI" },
+  { value: "mise", label: "mise", hint: "Drive the mise CLI" },
 ];
 
 export function Settings() {
@@ -53,24 +59,50 @@ export function Settings() {
   const diagnostics = useDiagnostics(diagnosticsEnabled);
 
   const [form, setForm] = useState<SettingsModel>({
+    engine: "auto",
     binaryPath: "",
     dataDir: "",
     defaultProjectDir: "",
-    theme: "dark",
+    theme: readStoredTheme(),
     recentProjects: [],
   });
   const [dirty, setDirty] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
+  const savedTheme = useRef<Theme>(normalizeTheme(settings.data?.settings.theme ?? readStoredTheme()));
 
   useEffect(() => {
     if (dirty || !settings.data) return;
     setForm(settings.data.settings);
   }, [settings.data, dirty]);
 
+  useEffect(() => {
+    savedTheme.current = normalizeTheme(settings.data?.settings.theme ?? readStoredTheme());
+  }, [settings.data?.settings.theme]);
+
+  // A theme card is a live preview. Navigating away without saving restores
+  // the persisted choice instead of leaving the next screen in preview mode.
+  useEffect(() => {
+    return () => {
+      applyTheme(savedTheme.current, { persist: false });
+    };
+  }, []);
+
   const save = useMutation({
     mutationFn: (next: SettingsModel) => SettingsService.Save(next),
     onSuccess: (view) => {
+      const theme = normalizeTheme(view.settings.theme);
+      applyTheme(theme);
       queryClient.setQueryData(queryKeys.settings, view);
+      queryClient.setQueryData<ManagerStatus>(queryKeys.status, (current) =>
+        current
+          ? {
+              ...current,
+              detection: view.detection,
+              engine: view.detection.engine,
+              settings: { ...current.settings, ...view.settings },
+            }
+          : current,
+      );
       setForm(view.settings);
       setDirty(false);
       invalidate();
@@ -78,12 +110,16 @@ export function Settings() {
       toast({
         title: "Settings saved",
         description: view.detection.found
-          ? `asdf ${view.detection.version || ""} is ready.`.trim()
-          : "Saved, but asdf is still not detected. Check the binary path.",
+          ? `${view.detection.engine || "engine"} ${view.detection.version || ""} is ready.`.trim()
+          : view.detection.engine && view.detection.engine !== "auto"
+            ? `Saved, but ${view.detection.engine} is still not detected. Check the binary path.`
+            : "Saved, but no version manager was detected. Check the binary path.",
         variant: view.detection.found ? "success" : "warning",
       });
     },
     onError: (error) => {
+      applyTheme(savedTheme.current, { persist: false });
+      setForm((current) => ({ ...current, theme: savedTheme.current }));
       toast({ title: "Could not save settings", description: errorMessage(error), variant: "error" });
     },
   });
@@ -91,14 +127,26 @@ export function Settings() {
   const reset = useMutation({
     mutationFn: () => SettingsService.Reset(),
     onSuccess: (view) => {
+      const theme = normalizeTheme(view.settings.theme);
+      applyTheme(theme);
       queryClient.setQueryData(queryKeys.settings, view);
+      queryClient.setQueryData<ManagerStatus>(queryKeys.status, (current) =>
+        current
+          ? {
+              ...current,
+              detection: view.detection,
+              engine: view.detection.engine,
+              settings: { ...current.settings, ...view.settings },
+            }
+          : current,
+      );
       setForm(view.settings);
       setDirty(false);
       setResetOpen(false);
       invalidate();
       toast({
         title: "Overrides cleared",
-        description: "asdf discovery is back to automatic detection.",
+        description: "Engine discovery is back to automatic detection.",
         variant: "info",
       });
     },
@@ -132,7 +180,7 @@ export function Settings() {
       void queryClient.invalidateQueries({ queryKey: queryKeys.status });
       void queryClient.invalidateQueries({ queryKey: queryKeys.settings });
       toast({
-        title: next.detection.found ? "asdf detected" : "asdf not found",
+        title: next.detection.found ? `${next.detection.engine || "engine"} detected` : "engine not found",
         description: next.detection.found
           ? `Using ${next.detection.binaryPath}`
           : next.detection.error || "Set the binary path below.",
@@ -153,13 +201,22 @@ export function Settings() {
 
   const canSave = dirty && form.theme !== "";
   const detection = settings.data?.detection ?? status.data?.detection;
+  const activeEngine = form.engine === "auto" ? detection?.engine || "auto" : form.engine;
+  const engineLabel = activeEngine === "auto" ? "auto-detect" : activeEngine;
+  const isMise = activeEngine === "mise";
+  const binaryLabel = isMise ? "mise binary" : form.engine === "asdf" ? "asdf binary" : "Version manager binary";
+  const dataDirLabel = isMise ? "MISE_DATA_DIR" : form.engine === "asdf" ? "ASDF_DATA_DIR" : "Data directory";
+  const binaryPlaceholder = isMise ? "auto-detect (e.g. ~/.local/bin/mise)" : "auto-detect (e.g. ~/.asdf/bin/asdf)";
+  const dataDirPlaceholder = isMise ? "auto-detect (e.g. ~/.local/share/mise)" : "auto-detect (e.g. ~/.asdf)";
+  const docsURL = isMise ? "https://mise.jdx.dev/" : "https://asdf-vm.com/guide/getting-started.html";
+  const infoLabel = `${activeEngine === "auto" ? "Engine" : activeEngine} info`;
 
   return (
     <div className="space-y-5">
       <PageHeader
         eyebrow="Preferences"
         title="Settings"
-        description="Point the app at a specific asdf installation, choose a default workspace, and inspect the environment the GUI will drive."
+        description="Choose asdf or mise, point the app at a specific installation, choose a default workspace, and inspect the environment the GUI will drive."
         actions={
           <>
             <Button variant="ghost" size="sm" onClick={() => setResetOpen(true)} disabled={reset.isPending}>
@@ -186,8 +243,8 @@ export function Settings() {
               <div>
                 <CardTitle>Engine</CardTitle>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  Leave a field empty to auto-detect from <span className="font-mono">PATH</span> and standard asdf
-                  locations.
+                  Auto prefers asdf when both are installed, then falls back to mise. Leave the paths empty to discover
+                  the selected engine from <span className="font-mono">PATH</span> and standard locations.
                 </p>
               </div>
               <Button variant="ghost" size="sm" className="h-7 text-[11px]" onClick={redetect}>
@@ -197,12 +254,57 @@ export function Settings() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div>
-                <Label>asdf binary</Label>
+                <Label>Version manager</Label>
+                <div className="grid gap-2 sm:grid-cols-3">
+                  {ENGINES.map((engine) => {
+                    const active = form.engine === engine.value;
+                    return (
+                      <button
+                        key={engine.value}
+                        onClick={() => {
+                          if (engine.value === form.engine) return;
+                          // Overrides are engine-specific: an asdf binary and
+                          // data directory must never be handed to mise.
+                          setForm((current) => ({
+                            ...current,
+                            engine: engine.value,
+                            binaryPath: "",
+                            dataDir: "",
+                          }));
+                          setDirty(true);
+                        }}
+                        aria-pressed={active}
+                        className={cn(
+                          "rounded-lg border px-3 py-2.5 text-left transition",
+                          active
+                            ? "border-accent/40 bg-accent/[0.07]"
+                            : "border-line bg-canvas/40 hover:border-line-strong",
+                        )}
+                      >
+                        <div className="flex items-center justify-between">
+                          <span className={cn("text-[12px] font-medium", active ? "text-ink" : "text-muted")}>
+                            {engine.label}
+                          </span>
+                          {active ? <CheckCircle2 className="size-3.5 text-accent" /> : null}
+                        </div>
+                        <div className="mt-0.5 text-[10px] leading-relaxed text-faint">{engine.hint}</div>
+                      </button>
+                    );
+                  })}
+                </div>
+                <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
+                  Switching engines clears the binary and data directory overrides so an asdf path is never used for
+                  mise, or the reverse.
+                </p>
+              </div>
+
+              <div>
+                <Label>{binaryLabel}</Label>
                 <div className="flex gap-2">
                   <Input
                     value={form.binaryPath}
                     onChange={(event) => update("binaryPath", event.target.value)}
-                    placeholder="auto-detect (e.g. ~/.asdf/bin/asdf)"
+                    placeholder={binaryPlaceholder}
                     className="font-mono text-[12px]"
                   />
                   <Button variant="secondary" onClick={() => pick(SettingsService.PickBinary, "binaryPath")}>
@@ -211,17 +313,18 @@ export function Settings() {
                   </Button>
                 </div>
                 <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
-                  Must be an executable asdf CLI. The app never reimplements asdf commands.
+                  Must be an executable {isMise ? "mise" : "version manager"} CLI. The app never reimplements{" "}
+                  {isMise ? "mise" : "asdf"} commands.
                 </p>
               </div>
 
               <div>
-                <Label>ASDF_DATA_DIR</Label>
+                <Label>{dataDirLabel}</Label>
                 <div className="flex gap-2">
                   <Input
                     value={form.dataDir}
                     onChange={(event) => update("dataDir", event.target.value)}
-                    placeholder="auto-detect (e.g. ~/.asdf)"
+                    placeholder={dataDirPlaceholder}
                     className="font-mono text-[12px]"
                   />
                   <Button variant="secondary" onClick={() => pick(SettingsService.PickDataDir, "dataDir")}>
@@ -230,8 +333,8 @@ export function Settings() {
                   </Button>
                 </div>
                 <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
-                  Where plugins and installed versions live. Useful when asdf is installed through Homebrew, Nix, or a
-                  custom prefix.
+                  Where plugins and installed versions live. Useful when {engineLabel} is installed through Homebrew,
+                  Nix, or a custom prefix.
                 </p>
               </div>
 
@@ -261,7 +364,8 @@ export function Settings() {
               <div>
                 <CardTitle>Appearance</CardTitle>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  The theme applies to the whole desktop app after saving.
+                  The theme applies to the whole desktop app and is previewed as you choose. Save changes to keep it
+                  across restarts.
                 </p>
               </div>
             </CardHeader>
@@ -273,7 +377,11 @@ export function Settings() {
                   return (
                     <button
                       key={theme.value}
-                      onClick={() => update("theme", theme.value)}
+                      onClick={() => {
+                        update("theme", theme.value);
+                        applyTheme(theme.value, { persist: false });
+                      }}
+                      aria-pressed={active}
                       className={cn(
                         "rounded-lg border px-3 py-3 text-left transition",
                         active
@@ -293,6 +401,9 @@ export function Settings() {
                   );
                 })}
               </div>
+              <p className="mt-2 text-[10px] leading-relaxed text-faint">
+                Click a theme to preview it now. Save changes to keep it after restarting the app.
+              </p>
             </CardContent>
           </Card>
 
@@ -301,7 +412,8 @@ export function Settings() {
               <div>
                 <CardTitle>Diagnostics</CardTitle>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  Verifies bash, git, the data directory, and shell integration. Runs live shell probes.
+                  Verifies bash, git, the data directory, and shell integration for {engineLabel}. Runs live shell
+                  probes.
                 </p>
               </div>
               <Button
@@ -342,11 +454,11 @@ export function Settings() {
                     ))}
                   </div>
 
-                  {diagnostics.data?.asdfInfo ? (
+                  {diagnostics.data?.engineInfo ? (
                     <div>
-                      <Label className="mb-1.5">asdf info</Label>
+                      <Label className="mb-1.5">{infoLabel}</Label>
                       <pre className="max-h-40 overflow-auto rounded-lg border border-line bg-canvas/60 p-3 font-mono text-[10.5px] leading-relaxed text-muted">
-                        {diagnostics.data.asdfInfo}
+                        {diagnostics.data.engineInfo}
                       </pre>
                     </div>
                   ) : null}
@@ -381,6 +493,7 @@ export function Settings() {
               </Badge>
             </CardHeader>
             <CardContent className="space-y-3 pt-3">
+              <PathRow label="Engine" value={detection?.engine || activeEngine || "—"} />
               <PathRow label="Binary" value={detection?.binaryPath || "—"} mono />
               <PathRow label="Version" value={detection?.version || "—"} mono />
               <PathRow label="Data dir" value={detection?.dataDir || "—"} mono />
@@ -435,11 +548,13 @@ export function Settings() {
             <CardContent className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-faint">Application</span>
-                <span className="font-mono text-[11px] text-muted">asdf GUI 0.1.0</span>
+                <span className="font-mono text-[11px] text-muted">asdf mise GUI 0.1.0</span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-faint">Engine</span>
-                <span className="font-mono text-[11px] text-muted">asdf {detection?.version || "—"}</span>
+                <span className="font-mono text-[11px] text-muted">
+                  {(detection?.engine || activeEngine || "asdf")} {detection?.version || "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-faint">Platform</span>
@@ -458,15 +573,15 @@ export function Settings() {
                 <Button
                   variant="secondary"
                   size="sm"
-                  onClick={() => void ManagerService.OpenURL("https://asdf-vm.com/guide/getting-started.html")}
+                  onClick={() => void ManagerService.OpenURL(docsURL)}
                 >
-                  asdf docs
+                  {isMise ? "mise docs" : "asdf docs"}
                   <ExternalLink className="size-3.5" />
                 </Button>
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void ManagerService.OpenURL("https://github.com/AshutoshSajan/asdf-gui")}
+                  onClick={() => void ManagerService.OpenURL("https://github.com/AshutoshSajan/asdf-mise-gui")}
                 >
                   GitHub
                   <ExternalLink className="size-3.5" />

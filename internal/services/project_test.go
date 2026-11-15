@@ -4,7 +4,7 @@ import (
 	"reflect"
 	"testing"
 
-	"github.com/AshutoshSajan/asdf-gui/internal/asdf"
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/asdf"
 )
 
 func TestMissingTools(t *testing.T) {
