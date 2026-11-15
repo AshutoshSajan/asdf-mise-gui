@@ -49,9 +49,9 @@
 
 ## Screenshots
 
-Every screen below is real data from the running app. Click an image to open
-the full-size capture. These captures predate the rename and used the asdf
-engine; the app now reads **asdf mise GUI** and drives either asdf or mise.
+Every screen below is a real capture of the running app driving mise. Click an
+image to open the full-size shot. The same screens drive asdf when it is
+selected as the engine.
 
 <table>
   <tr>
@@ -68,19 +68,19 @@ engine; the app now reads **asdf mise GUI** and drives either asdf or mise.
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/plugins.png"><img src="./docs/assets/screenshots/plugins.png" alt="Plugins screen listing installed plugins with git refs, repository URLs, and version and update actions" width="100%" /></a>
+      <a href="./docs/assets/screenshots/plugins.png"><img src="./docs/assets/screenshots/plugins.png" alt="Plugins screen showing the full searchable mise registry with add actions" width="100%" /></a>
       <br/>
-      <sub><strong>Plugins</strong> — registry search, git refs, and update or remove actions.</sub>
+      <sub><strong>Plugins</strong> — browse the entire asdf or mise registry in one searchable list.</sub>
     </td>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/project.png"><img src="./docs/assets/screenshots/project.png" alt="Project screen editing a .tool-versions file with active and missing version badges, recent projects, and global pins" width="100%" /></a>
+      <a href="./docs/assets/screenshots/project.png"><img src="./docs/assets/screenshots/project.png" alt="Project screen editing a mise.toml file with active and missing version badges, recent projects, and global pins" width="100%" /></a>
       <br/>
       <sub><strong>Project</strong> — edit <code>.tool-versions</code> or <code>mise.toml</code> and install missing pins.</sub>
     </td>
   </tr>
   <tr>
     <td width="50%" valign="top">
-      <a href="./docs/assets/screenshots/operations.png"><img src="./docs/assets/screenshots/operations.png" alt="Operations screen showing a running nodejs install with streamed output, queue counts, and cancel controls" width="100%" /></a>
+      <a href="./docs/assets/screenshots/operations.png"><img src="./docs/assets/screenshots/operations.png" alt="Operations screen showing completed mise installs with streamed output and queue counts" width="100%" /></a>
       <br/>
       <sub><strong>Operations</strong> — one serialized queue, live output, and a persisted log for every run.</sub>
     </td>
