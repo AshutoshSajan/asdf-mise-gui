@@ -80,6 +80,7 @@ export interface SettingsView {
 export interface Status {
     "detection": asdf$0.Detection;
     "settings": settings$0.Settings;
+    "appVersion": string;
     "engine": string;
     "os": string;
     "arch": string;
@@ -103,4 +104,26 @@ export interface ToolView {
     "currentInstalled": boolean;
     "system": boolean;
     "message"?: string;
+}
+
+/**
+ * UpdateStatus is the single snapshot the frontend renders. It deliberately
+ * avoids leaking updater.Release internals such as raw digests.
+ */
+export interface UpdateStatus {
+    "currentVersion": string;
+    "latestVersion": string;
+    "releaseName": string;
+    "releaseNotes": string;
+    "releaseURL": string;
+    "publishedAt": string;
+    "assetName": string;
+    "assetSize": number;
+    "checksummed": boolean;
+    "state": string;
+    "error": string;
+    "checkedAt": string;
+    "checkEnabled": boolean;
+    "canSelfUpdate": boolean;
+    "installable": boolean;
 }

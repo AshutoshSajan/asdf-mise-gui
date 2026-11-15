@@ -7,13 +7,15 @@ import * as PluginsService from "./pluginsservice.js";
 import * as ProjectService from "./projectservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as ToolsService from "./toolsservice.js";
+import * as UpdateService from "./updateservice.js";
 export {
     ManagerService,
     OperationService,
     PluginsService,
     ProjectService,
     SettingsService,
-    ToolsService
+    ToolsService,
+    UpdateService
 };
 
 export type {
@@ -23,5 +25,6 @@ export type {
     RecentProject,
     SettingsView,
     Status,
-    ToolView
+    ToolView,
+    UpdateStatus
 } from "./models.js";

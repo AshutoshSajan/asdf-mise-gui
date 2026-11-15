@@ -41,6 +41,7 @@ func main() {
 	projectService := services.NewProjectService(runtime, toolsService)
 	operationService := services.NewOperationService(runtime)
 	settingsService := services.NewSettingsService(runtime)
+	updateService := services.NewUpdateService(runtime)
 
 	app := application.New(application.Options{
 		Name:        "asdf-mise-gui",
@@ -53,6 +54,7 @@ func main() {
 			application.NewService(projectService),
 			application.NewService(operationService),
 			application.NewService(settingsService),
+			application.NewService(updateService),
 		},
 		Assets: application.AssetOptions{
 			Handler: application.AssetFileServerFS(assets),

@@ -3,6 +3,7 @@ import {
   AlertTriangle,
   CheckCircle2,
   Database,
+  Download,
   ExternalLink,
   FileCog,
   FolderOpen,
@@ -13,6 +14,8 @@ import {
   RotateCcw,
   Save,
   Settings2,
+  ShieldCheck,
+  Sparkles,
   Sun,
   Terminal,
   XCircle,
@@ -25,8 +28,17 @@ import { Card, CardContent, CardHeader, CardTitle } from "../components/ui/card"
 import { Input, Label } from "../components/ui/input";
 import { ConfirmDialog } from "../components/ui/confirm-dialog";
 import { useToast } from "../components/ui/toast";
-import { useDiagnostics, useInvalidateAppData, useSettings, useStatus, queryKeys } from "../lib/query";
-import { errorMessage, shortenPath, statusLabel } from "../lib/format";
+import {
+  queryKeys,
+  useCheckForUpdates,
+  useDiagnostics,
+  useInstallUpdate,
+  useInvalidateAppData,
+  useSettings,
+  useStatus,
+  useUpdateStatus,
+} from "../lib/query";
+import { errorMessage, formatBytes, shortenPath, statusLabel } from "../lib/format";
 import { applyTheme, normalizeTheme, readStoredTheme, type Theme } from "../lib/theme";
 import { cn } from "../lib/utils";
 import {
@@ -48,6 +60,9 @@ const ENGINES: { value: "auto" | "asdf" | "mise"; label: string; hint: string }[
   { value: "mise", label: "mise", hint: "Drive the mise CLI" },
 ];
 
+const REPO_URL = "https://github.com/AshutoshSajan/asdf-mise-gui";
+const RELEASES_URL = `${REPO_URL}/releases`;
+
 export function Settings() {
   const queryClient = useQueryClient();
   const invalidate = useInvalidateAppData();
@@ -57,6 +72,9 @@ export function Settings() {
   const settings = useSettings();
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
   const diagnostics = useDiagnostics(diagnosticsEnabled);
+  const updateStatus = useUpdateStatus();
+  const checkUpdate = useCheckForUpdates();
+  const installUpdate = useInstallUpdate();
 
   const [form, setForm] = useState<SettingsModel>({
     engine: "auto",
@@ -64,6 +82,7 @@ export function Settings() {
     dataDir: "",
     defaultProjectDir: "",
     theme: readStoredTheme(),
+    checkForUpdates: true,
     recentProjects: [],
   });
   const [dirty, setDirty] = useState(false);
@@ -210,6 +229,49 @@ export function Settings() {
   const dataDirPlaceholder = isMise ? "auto-detect (e.g. ~/.local/share/mise)" : "auto-detect (e.g. ~/.asdf)";
   const docsURL = isMise ? "https://mise.jdx.dev/" : "https://asdf-vm.com/guide/getting-started.html";
   const infoLabel = `${activeEngine === "auto" ? "Engine" : activeEngine} info`;
+
+  const updater = updateStatus.data;
+  const updateState = updater?.state ?? "idle";
+  const updateBusy = checkUpdate.isPending || updateState === "checking";
+
+  const installNow = () => {
+    installUpdate.mutate(undefined, {
+      onError: (error) => {
+        toast({ title: "Update failed", description: errorMessage(error), variant: "error" });
+      },
+    });
+  };
+
+  const checkNow = () => {
+    checkUpdate.mutate(undefined, {
+      onSuccess: (next) => {
+        if (next.state === "up-to-date") {
+          toast({
+            title: "You are up to date",
+            description: `Version ${next.currentVersion} is the latest release.`,
+            variant: "success",
+          });
+        } else if (next.state === "available") {
+          toast({
+            title: `Version ${next.latestVersion} is available`,
+            description: next.installable
+              ? "Install it in place here, or read the release notes first."
+              : "Download it from GitHub Releases. This build cannot replace itself.",
+            variant: "info",
+          });
+        } else {
+          toast({
+            title: "Update check failed",
+            description: next.error || "GitHub did not return a release.",
+            variant: "error",
+          });
+        }
+      },
+      onError: (error) => {
+        toast({ title: "Update check failed", description: errorMessage(error), variant: "error" });
+      },
+    });
+  };
 
   return (
     <div className="space-y-5">
@@ -542,13 +604,136 @@ export function Settings() {
 
           <Card>
             <CardHeader>
+              <div>
+                <CardTitle>Updates</CardTitle>
+                <p className="mt-1 text-[11px] leading-relaxed text-muted">
+                  Checks GitHub Releases at launch and on demand. The AppImage verifies a SHA-256 checksum and updates in
+                  place; every other build links to the release download.
+                </p>
+              </div>
+              <Badge variant={updateBadgeVariant(updateState)}>{updateBadgeLabel(updateState)}</Badge>
+            </CardHeader>
+            <CardContent className="space-y-3 pt-3">
+              <div className="grid grid-cols-2 gap-3 rounded-lg border border-line-soft bg-canvas/30 px-3 py-2.5">
+                <VersionCell label="Current" value={updater?.currentVersion || status.data?.appVersion || "—"} />
+                <VersionCell label="Latest" value={updater?.latestVersion || "—"} />
+              </div>
+
+              {updateState === "error" && updater?.error ? (
+                <div className="rounded-lg border border-danger/20 bg-danger/5 px-3 py-2 text-[10.5px] leading-relaxed text-danger">
+                  {updater.error}
+                </div>
+              ) : null}
+
+              {updateState === "up-to-date" ? (
+                <div className="flex items-start gap-2 rounded-lg border border-accent/20 bg-accent/5 px-3 py-2 text-[10.5px] leading-relaxed text-accent">
+                  <CheckCircle2 className="mt-0.5 size-3.5 shrink-0" />
+                  You are running the latest release.
+                </div>
+              ) : null}
+
+              {updateState === "available" ? (
+                <div className="space-y-2">
+                  <div className="flex items-start gap-2 rounded-lg border border-info/20 bg-info/5 px-3 py-2">
+                    <Sparkles className="mt-0.5 size-3.5 shrink-0 text-info" />
+                    <div className="min-w-0 flex-1">
+                      <p className="text-[11px] font-medium text-ink">
+                        {updater?.releaseName || `Version ${updater?.latestVersion ?? "unknown"}`}
+                      </p>
+                      <p className="mt-0.5 text-[10px] leading-relaxed text-faint">
+                        {updater?.publishedAt
+                          ? `Published ${new Date(updater.publishedAt).toLocaleDateString()}`
+                          : "Published on GitHub Releases"}
+                        {updater?.assetName ? ` · ${updater.assetName}` : ""}
+                        {updater?.assetSize ? ` · ${formatBytes(updater.assetSize)}` : ""}
+                      </p>
+                    </div>
+                  </div>
+                  {updater?.releaseNotes ? (
+                    <details className="rounded-lg border border-line-soft bg-canvas/30 px-3 py-2">
+                      <summary className="cursor-pointer text-[11px] text-muted">Release notes</summary>
+                      <pre className="mt-2 max-h-40 overflow-auto whitespace-pre-wrap break-words font-sans text-[10.5px] leading-relaxed text-faint">
+                        {updater.releaseNotes}
+                      </pre>
+                    </details>
+                  ) : null}
+                </div>
+              ) : null}
+
+              <div className="flex flex-wrap gap-2">
+                <Button variant="secondary" size="sm" loading={updateBusy} onClick={checkNow}>
+                  <RefreshCw className={cn("size-3.5", updateBusy && "animate-spin")} />
+                  Check now
+                </Button>
+                {updateState === "available" && updater?.installable ? (
+                  <Button size="sm" loading={installUpdate.isPending} onClick={installNow}>
+                    <Download className="size-3.5" />
+                    Install update
+                  </Button>
+                ) : null}
+                {updateState === "available" && !updater?.installable ? (
+                  <Button size="sm" onClick={() => void ManagerService.OpenURL(updater?.releaseURL || RELEASES_URL)}>
+                    <ExternalLink className="size-3.5" />
+                    Download release
+                  </Button>
+                ) : null}
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  onClick={() => void ManagerService.OpenURL(updater?.releaseURL || RELEASES_URL)}
+                >
+                  View release
+                </Button>
+              </div>
+
+              <div className="flex items-start gap-2 rounded-lg border border-line-soft bg-canvas/30 px-3 py-2.5 text-[10.5px] leading-relaxed text-muted">
+                <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-accent" />
+                {updater?.canSelfUpdate
+                  ? "Downloads are verified against the release's SHA-256 checksum before the AppImage is replaced. Settings and projects are kept."
+                  : "This build cannot replace itself. Downloading opens GitHub Releases; settings and projects stay untouched."}
+              </div>
+
+              <div className="flex items-start justify-between gap-3 border-t border-line-soft pt-3">
+                <div className="min-w-0">
+                  <div className="text-[11px] font-medium text-ink">Check at launch</div>
+                  <p className="mt-0.5 text-[10px] leading-relaxed text-faint">
+                    Ask GitHub for the latest release when the app opens. No account, telemetry, or personal data is
+                    involved. Save changes to apply.
+                  </p>
+                </div>
+                <button
+                  type="button"
+                  role="switch"
+                  aria-checked={form.checkForUpdates}
+                  aria-label="Check for updates at launch"
+                  onClick={() => update("checkForUpdates", !form.checkForUpdates)}
+                  className={cn(
+                    "relative mt-0.5 h-5 w-9 shrink-0 rounded-full border transition",
+                    form.checkForUpdates ? "border-accent/40 bg-accent" : "border-line bg-elevated",
+                  )}
+                >
+                  <span
+                    className={cn(
+                      "absolute top-1/2 size-3.5 -translate-y-1/2 rounded-full bg-white shadow transition-[left]",
+                      form.checkForUpdates ? "left-[18px]" : "left-[2px]",
+                    )}
+                  />
+                </button>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardHeader>
               <CardTitle>About</CardTitle>
               <Info className="size-3.5 text-faint" />
             </CardHeader>
             <CardContent className="space-y-3 pt-3">
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-faint">Application</span>
-                <span className="font-mono text-[11px] text-muted">asdf mise GUI 0.1.0</span>
+                <span className="font-mono text-[11px] text-muted">
+                  asdf mise GUI {status.data?.appVersion || updater?.currentVersion || "—"}
+                </span>
               </div>
               <div className="flex items-center justify-between">
                 <span className="text-[11px] text-faint">Engine</span>
@@ -581,7 +766,7 @@ export function Settings() {
                 <Button
                   variant="ghost"
                   size="sm"
-                  onClick={() => void ManagerService.OpenURL("https://github.com/AshutoshSajan/asdf-mise-gui")}
+                  onClick={() => void ManagerService.OpenURL(REPO_URL)}
                 >
                   GitHub
                   <ExternalLink className="size-3.5" />
@@ -636,6 +821,56 @@ function CheckRow({ name, status, detail }: { name: string; status: string; deta
         <p className="mt-0.5 break-words font-mono text-[10px] leading-relaxed text-faint" title={detail}>
           {detail}
         </p>
+      </div>
+    </div>
+  );
+}
+
+type BadgeVariant = "default" | "accent" | "success" | "warning" | "danger" | "info" | "outline" | "solid";
+
+function updateBadgeVariant(state: string): BadgeVariant {
+  switch (state) {
+    case "available":
+      return "info";
+    case "up-to-date":
+      return "success";
+    case "downloading":
+    case "checking":
+      return "info";
+    case "ready":
+      return "accent";
+    case "error":
+      return "danger";
+    default:
+      return "default";
+  }
+}
+
+function updateBadgeLabel(state: string): string {
+  switch (state) {
+    case "available":
+      return "Update available";
+    case "up-to-date":
+      return "Up to date";
+    case "checking":
+      return "Checking";
+    case "downloading":
+      return "Downloading";
+    case "ready":
+      return "Ready to restart";
+    case "error":
+      return "Check failed";
+    default:
+      return "Not checked";
+  }
+}
+
+function VersionCell({ label, value }: { label: string; value: string }) {
+  return (
+    <div className="min-w-0">
+      <div className="text-[10px] uppercase tracking-[0.08em] text-faint">{label}</div>
+      <div className="mt-0.5 truncate font-mono text-[12px] text-muted" title={value}>
+        {value}
       </div>
     </div>
   );

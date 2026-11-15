@@ -100,7 +100,7 @@ Because asdf and mise already work. This project is a **front-end, not a fork**.
 - **No hidden state.** Project pins live in the `.tool-versions` or `mise.toml` file you already commit. Settings live in a small JSON file. Operation logs live on disk and are one click away.
 - **Mutations are serialized.** Version managers share a data directory, a plugin checkout, and a shim directory. asdf mise GUI runs write operations one at a time through a FIFO queue, so two installs can never race each other.
 - **The work is visible.** Long installs stream stdout and stderr into the app line by line. Cancel stops the whole process group, not just the parent process.
-- **It stays local.** No telemetry, no accounts, no background daemon, no bundled runtimes.
+- **It stays local.** No telemetry, no accounts, no background daemon, no bundled runtimes. The only network call the app makes itself is an optional GitHub release check.
 
 ## Install
 
@@ -108,8 +108,8 @@ Grab the latest Linux AppImage from the
 [releases page](https://github.com/AshutoshSajan/asdf-mise-gui/releases):
 
 ```bash
-chmod +x asdf-mise-gui-*.AppImage
-./asdf-mise-gui-*.AppImage
+chmod +x asdf-mise-gui-linux-x86_64.AppImage
+./asdf-mise-gui-linux-x86_64.AppImage
 ```
 
 The AppImage bundles the application and its GTK4/WebKitGTK 6.0 runtime
@@ -134,6 +134,30 @@ The release binary is built on Ubuntu 24.04, so it requires glibc `2.39+`.
 Older distributions should build from source against their own GTK stack.
 
 </details>
+
+## Updates
+
+AppImage builds update themselves. The app checks
+[GitHub Releases](https://github.com/AshutoshSajan/asdf-mise-gui/releases) once
+at launch and whenever you choose **Settings → Updates → Check now**. When a
+newer release exists, a banner shows the version and its release notes. Nothing
+is downloaded until you choose **Update now**.
+
+On the AppImage build, the download is streamed to a staging file, verified
+against the release's `checksums.txt` (SHA-256), swapped into place, and the app
+restarts. A missing or mismatched checksum aborts the install and leaves the
+current AppImage untouched. Settings, projects, and asdf/mise data are not
+modified.
+
+Development binaries, macOS app bundles, and DEB/RPM packages cannot replace
+themselves. They show the same update notice but open the GitHub release page
+instead.
+
+Launch checks are enabled by default and can be disabled in
+**Settings → Updates**; manual checks always work. The app's only outbound
+request of its own is this GitHub API check. It sends no account information,
+usage data, or local paths. asdf and mise plugin traffic remains between those
+CLIs and their upstreams.
 
 ## Quick start
 
@@ -259,10 +283,13 @@ files live under [`build/`](./build).
 - **Operations** — every mutation becomes an operation with a status, a live
   output stream, a cancel action, and a persisted log file. The queue shows what
   is running, what is waiting, and what failed.
+- **Updates** — check GitHub Releases at launch or on demand, read release notes,
+  and let the AppImage verify a SHA-256 checksum and restart into the new build.
+  Other builds link to the release download page.
 - **Settings & diagnostics** — choose asdf or mise (or auto-detect), override
   the binary or `ASDF_DATA_DIR`/`MISE_DATA_DIR`, choose a default project, follow
-  the system theme or force dark/light, and run environment checks for bash,
-  git, shims, and platform support.
+  the system theme or force dark/light, control launch update checks, and run
+  environment checks for bash, git, shims, and platform support.
 
 ### Designed around real engine behaviour
 
@@ -356,7 +383,8 @@ asdf mise GUI runs local commands on your behalf, so the boundaries are delibera
 | **Concurrent writes** | Mutations run through a single FIFO queue. `.tool-versions` and settings are written atomically; mise TOML writes go through `mise use`. |
 | **Interactive prompts** | Git terminal prompts are disabled so plugin operations cannot hang waiting for credentials. |
 | **External links** | Only `http://` and `https://` URLs are opened in the system browser. |
-| **Privacy** | The app has no telemetry and makes no network calls of its own. Network activity comes from asdf, mise, and their plugins. |
+| **Update verification** | AppImage downloads must match a SHA-256 digest from the release's `checksums.txt`; a mismatch aborts before the running image is replaced. |
+| **Privacy** | The app has no telemetry. Its only own network call is the optional GitHub Releases update check; all other network activity comes from asdf, mise, and their plugins. |
 
 Logs may contain local paths and command output. They stay on your machine.
 
@@ -455,7 +483,8 @@ same report without failing.
 │   ├── core/                   # shared runtime, caching, runner factory
 │   ├── ops/                    # FIFO queue, streamed events, cancellation, logs
 │   ├── services/               # typed Wails services consumed by the UI
-│   └── settings/               # JSON settings and recent projects
+│   ├── settings/               # JSON settings and recent projects
+│   └── version/                # single source of truth for the app version
 ├── frontend/
 │   ├── src/
 │   │   ├── components/         # app shell, operation UI, Radix primitives
@@ -465,7 +494,7 @@ same report without failing.
 ├── build/                      # Wails build tasks, packaging, platform assets
 ├── .github/workflows/          # CI, audit, and release automation
 ├── .githooks/                  # dependency freshness gates
-├── scripts/                    # dependency check helper
+├── scripts/                    # dependency check helper and version sync
 ├── docs/assets/                # README banner and app screenshots
 └── Taskfile.yml                # developer entrypoints
 ```
@@ -475,7 +504,12 @@ same report without failing.
 Releases are driven by tags. The [release workflow](./.github/workflows/release.yml)
 builds the AppImage on Ubuntu 24.04 against GTK4/WebKitGTK 6.0:
 
-1. Bump `build/config.yml` and `frontend/package.json`, then commit.
+1. Bump every versioned file with the repository script, then commit:
+
+   ```bash
+   node scripts/set-version.mjs 0.2.0
+   ```
+
 2. Tag and push:
 
    ```bash
@@ -483,10 +517,16 @@ builds the AppImage on Ubuntu 24.04 against GTK4/WebKitGTK 6.0:
    git push origin v0.2.0
    ```
 
-The workflow syncs the tag version into the build metadata, runs
-`task linux:create:appimage`, unpacks the result to verify `AppRun` and the
-desktop entry, uploads the artifact, and publishes a GitHub release with the
-AppImage attached.
+The workflow syncs the tag version into the build metadata with the same script,
+runs `task linux:create:appimage`, unpacks the result to verify `AppRun` and the
+desktop entry, and renames the asset to
+`asdf-mise-gui-linux-<arch>.AppImage`. It then writes `checksums.txt` with
+`sha256sum`, uploads both files as workflow artifacts, and publishes a GitHub
+release with the AppImage and checksum sidecar attached.
+
+The updater resolves assets by that platform-and-architecture name. Keep the
+pattern when changing packaging, or AppImage self-update will stop finding new
+releases.
 
 ## Troubleshooting
 
@@ -597,6 +637,7 @@ Windows 11's WSLg provides the display and audio integration.
 - [x] Tools, plugins, project, operations, and settings screens
 - [x] CI for tests, builds, vulnerability scans, and dependency audits
 - [x] Tag-driven Linux AppImage releases
+- [x] In-app update checks with verified AppImage self-update
 - [ ] Signed release artifacts for macOS and Linux
 - [ ] WSL2 runner bridge
 - [ ] Multi-project workspaces and richer version comparisons

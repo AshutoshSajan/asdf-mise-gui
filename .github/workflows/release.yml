@@ -62,22 +62,7 @@ jobs:
         if: startsWith(github.ref, 'refs/tags/v')
         env:
           RELEASE_VERSION: ${{ github.ref_name }}
-        run: |
-          VERSION="${RELEASE_VERSION#v}"
-          sed -i -E "s/^  version: \".*\"/  version: \"${VERSION}\"/" build/config.yml
-          sed -i -E "s/^version: \".*\"/version: \"${VERSION}\"/" build/linux/nfpm/nfpm.yaml
-          VERSION="$VERSION" node - <<'NODE'
-          const fs = require("node:fs");
-          const version = process.env.VERSION;
-          const pkg = JSON.parse(fs.readFileSync("frontend/package.json", "utf8"));
-          pkg.version = version;
-          fs.writeFileSync("frontend/package.json", JSON.stringify(pkg, null, 2) + "\n");
-          const lock = JSON.parse(fs.readFileSync("frontend/package-lock.json", "utf8"));
-          lock.version = version;
-          if (lock.packages && lock.packages[""]) lock.packages[""].version = version;
-          fs.writeFileSync("frontend/package-lock.json", JSON.stringify(lock, null, 2) + "\n");
-          NODE
-          echo "Building asdf mise GUI ${VERSION}"
+        run: node scripts/set-version.mjs "$RELEASE_VERSION"
 
       - name: Build AppImage
         run: wails3 task linux:create:appimage
@@ -96,20 +81,35 @@ jobs:
           test -x squashfs-root/AppRun
           test -f squashfs-root/asdf-mise-gui.desktop
           rm -rf squashfs-root
-          ls -lh "$APPIMAGE"
-          echo "APPIMAGE=$APPIMAGE" >> "$GITHUB_ENV"
+
+          # Wails' updater matcher requires both the platform and architecture
+          # in the asset name. Keep this in sync with updateAssetMatcher.
+          ARCH="$(uname -m)"
+          TARGET="bin/asdf-mise-gui-linux-${ARCH}.AppImage"
+          mv "$APPIMAGE" "$TARGET"
+          chmod +x "$TARGET"
+
+          (cd bin && sha256sum "$(basename "$TARGET")" > checksums.txt)
+          grep -q "asdf-mise-gui-linux-${ARCH}.AppImage" bin/checksums.txt
+          test -s bin/checksums.txt
+
+          ls -lh "$TARGET" bin/checksums.txt
 
       - name: Upload workflow artifact
         uses: actions/upload-artifact@v7
         with:
           name: asdf-mise-gui-appimage
-          path: bin/*.AppImage
+          path: |
+            bin/*.AppImage
+            bin/checksums.txt
           if-no-files-found: error
 
       - name: Publish GitHub release
         if: startsWith(github.ref, 'refs/tags/v')
         uses: softprops/action-gh-release@v3
         with:
-          files: bin/*.AppImage
+          files: |
+            bin/*.AppImage
+            bin/checksums.txt
           generate_release_notes: true
           fail_on_unmatched_files: true

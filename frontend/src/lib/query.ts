@@ -1,4 +1,4 @@
-import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   ManagerService,
   OperationService,
@@ -6,6 +6,7 @@ import {
   ProjectService,
   SettingsService,
   ToolsService,
+  UpdateService,
 } from "./bindings";
 
 export const queryKeys = {
@@ -21,6 +22,7 @@ export const queryKeys = {
   diagnostics: ["diagnostics"] as const,
   available: (tool: string) => ["available", tool] as const,
   latest: ["latest"] as const,
+  update: ["update"] as const,
 };
 
 export function useStatus(refresh = false) {
@@ -138,6 +140,37 @@ export function useLatestVersions() {
     queryKey: queryKeys.latest,
     queryFn: () => ToolsService.LatestAll(),
     staleTime: 60_000,
+  });
+}
+
+export function useUpdateStatus() {
+  return useQuery({
+    queryKey: queryKeys.update,
+    queryFn: () => UpdateService.Status(),
+    staleTime: 5_000,
+  });
+}
+
+export function useCheckForUpdates() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => UpdateService.Check(),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.update, status);
+    },
+  });
+}
+
+export function useInstallUpdate() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: () => UpdateService.Install(),
+    onSuccess: (status) => {
+      queryClient.setQueryData(queryKeys.update, status);
+    },
+    onSettled: () => {
+      void queryClient.invalidateQueries({ queryKey: queryKeys.update });
+    },
   });
 }
 

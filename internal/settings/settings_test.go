@@ -33,6 +33,9 @@ func TestMigrateSettings(t *testing.T) {
 	if len(got.RecentProjects) != 1 || got.RecentProjects[0] != "/work/app" {
 		t.Fatalf("unexpected recent projects: %+v", got.RecentProjects)
 	}
+	if !got.CheckForUpdates {
+		t.Fatal("legacy settings should enable update checks by default")
+	}
 
 	raw, err := os.ReadFile(store.path)
 	if err != nil {
@@ -49,6 +52,36 @@ func TestMigrateSettings(t *testing.T) {
 	// The legacy file must survive so a downgrade still starts with its config.
 	if _, err := os.Stat(legacyPath); err != nil {
 		t.Fatalf("legacy settings file was removed: %v", err)
+	}
+}
+
+func TestDecodeSettingsDefaultsUpdateChecks(t *testing.T) {
+	var got Settings
+	if err := decodeSettings([]byte(`{"engine":"mise","theme":"light"}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.CheckForUpdates {
+		t.Fatal("settings without checkForUpdates should enable update checks")
+	}
+}
+
+func TestDecodeSettingsPreservesUpdateOptOut(t *testing.T) {
+	var got Settings
+	if err := decodeSettings([]byte(`{"engine":"asdf","checkForUpdates":false}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if got.CheckForUpdates {
+		t.Fatal("an explicit checkForUpdates:false must be preserved")
+	}
+}
+
+func TestDecodeSettingsNullUpdateChecksDefaultsToTrue(t *testing.T) {
+	var got Settings
+	if err := decodeSettings([]byte(`{"checkForUpdates":null}`), &got); err != nil {
+		t.Fatal(err)
+	}
+	if !got.CheckForUpdates {
+		t.Fatal("null checkForUpdates should fall back to enabled")
 	}
 }
 
