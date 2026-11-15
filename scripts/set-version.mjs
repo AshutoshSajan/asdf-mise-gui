@@ -2,8 +2,8 @@
 // Set the application version everywhere it is recorded.
 //
 // Usage:
-//   node scripts/set-version.mjs 0.2.0
-//   node scripts/set-version.mjs v0.2.0
+//   node scripts/set-version.mjs 0.3.0
+//   node scripts/set-version.mjs v0.3.0
 
 import fs from "node:fs";
 import path from "node:path";
@@ -42,6 +42,20 @@ for (const file of ["build/darwin/Info.plist", "build/darwin/Info.dev.plist"]) {
   );
   replaceLine(file, /(<key>CFBundleVersion<\/key>\s*<string>)[^<]*(<\/string>)/, `$1${version}$2`);
 }
+
+for (const key of ["file_version", "product_version", "FileVersion", "ProductVersion"]) {
+  replaceLine(
+    "build/windows/info.json",
+    new RegExp(`("${key}": ")[^"]*(")`),
+    `$1${version}$2`,
+  );
+}
+
+replaceLine(
+  "build/windows/nsis/wails_tools.nsh",
+  /^(\s*!define INFO_PRODUCTVERSION ")[^"]*(")/m,
+  `$1${version}$2`,
+);
 
 const packagePath = path.join(root, "frontend/package.json");
 const pkg = JSON.parse(fs.readFileSync(packagePath, "utf8"));
