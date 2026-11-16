@@ -126,8 +126,8 @@ func migrateSettings(store *Store, legacyPath string) bool {
 	if err := decodeSettings(raw, &legacy); err != nil {
 		return false
 	}
-	// Save updates the in-memory value before writing, so a failed migration
-	// write still leaves the imported settings usable for this session.
+	// A failed migration write leaves the in-memory defaults in place; the
+	// legacy file is untouched, so the next start can retry the migration.
 	_ = store.Save(legacy)
 	return true
 }
@@ -159,10 +159,11 @@ func sanitize(value Settings) Settings {
 	return value
 }
 
-// Workspace limits keep the settings file and scan results bounded.
+// Workspace limits keep the settings file and scan results bounded. They are
+// exported so the service validates the same limits the store enforces.
 const (
-	maxWorkspaces     = 20
-	maxWorkspacePaths = 40
+	MaxWorkspaces        = 20
+	MaxWorkspaceProjects = 40
 )
 
 func sanitizeWorkspaces(items []Workspace) []Workspace {
@@ -183,13 +184,13 @@ func sanitizeWorkspaces(items []Workspace) []Workspace {
 			}
 			seenPaths[project] = true
 			projects = append(projects, project)
-			if len(projects) == maxWorkspacePaths {
+			if len(projects) == MaxWorkspaceProjects {
 				break
 			}
 		}
 		seenIDs[id] = true
 		out = append(out, Workspace{ID: id, Name: name, Projects: projects})
-		if len(out) == maxWorkspaces {
+		if len(out) == MaxWorkspaces {
 			break
 		}
 	}
@@ -199,10 +200,13 @@ func sanitizeWorkspaces(items []Workspace) []Workspace {
 func (s *Store) Get() Settings {
 	s.mu.RLock()
 	defer s.mu.RUnlock()
-	copied := s.data
-	copied.RecentProjects = append([]string(nil), s.data.RecentProjects...)
-	copied.Workspaces = cloneWorkspaces(s.data.Workspaces)
-	return copied
+	return cloneSettings(s.data)
+}
+
+func cloneSettings(value Settings) Settings {
+	value.RecentProjects = append([]string(nil), value.RecentProjects...)
+	value.Workspaces = cloneWorkspaces(value.Workspaces)
+	return value
 }
 
 func cloneWorkspaces(items []Workspace) []Workspace {
@@ -217,12 +221,31 @@ func cloneWorkspaces(items []Workspace) []Workspace {
 
 func (s *Store) Path() string { return s.path }
 
+// Save replaces all settings. Callers that change part of the settings should
+// use Update so concurrent changes are not overwritten.
 func (s *Store) Save(next Settings) error {
-	next = sanitize(next)
 	s.mu.Lock()
-	s.data = next
-	s.mu.Unlock()
+	defer s.mu.Unlock()
+	return s.saveLocked(next)
+}
 
+// Update applies mutate to a copy of the current settings and persists the
+// result in one transaction. A failed write leaves both the in-memory and
+// on-disk settings unchanged. The callback must not call back into the store.
+func (s *Store) Update(mutate func(*Settings) error) error {
+	s.mu.Lock()
+	defer s.mu.Unlock()
+	next := cloneSettings(s.data)
+	if err := mutate(&next); err != nil {
+		return err
+	}
+	return s.saveLocked(next)
+}
+
+// saveLocked writes settings and only publishes them to readers after the
+// write succeeds. The caller must hold s.mu.
+func (s *Store) saveLocked(next Settings) error {
+	next = sanitize(next)
 	raw, err := json.MarshalIndent(next, "", "  ")
 	if err != nil {
 		return err
@@ -231,7 +254,11 @@ func (s *Store) Save(next Settings) error {
 	if err := os.MkdirAll(filepath.Dir(s.path), 0o755); err != nil {
 		return err
 	}
-	return writeAtomic(s.path, raw, 0o600)
+	if err := writeAtomic(s.path, raw, 0o600); err != nil {
+		return err
+	}
+	s.data = next
+	return nil
 }
 
 // AddRecentProject moves dir to the front of the recent list.
@@ -239,20 +266,19 @@ func (s *Store) AddRecentProject(dir string) error {
 	if dir == "" {
 		return nil
 	}
-	s.mu.Lock()
-	recent := []string{dir}
-	for _, existing := range s.data.RecentProjects {
-		if existing != dir {
-			recent = append(recent, existing)
+	return s.Update(func(next *Settings) error {
+		recent := []string{dir}
+		for _, existing := range next.RecentProjects {
+			if existing != dir {
+				recent = append(recent, existing)
+			}
 		}
-	}
-	if len(recent) > 12 {
-		recent = recent[:12]
-	}
-	s.data.RecentProjects = recent
-	next := s.data
-	s.mu.Unlock()
-	return s.Save(next)
+		if len(recent) > 12 {
+			recent = recent[:12]
+		}
+		next.RecentProjects = recent
+		return nil
+	})
 }
 
 func (s *Store) Workspaces() []Workspace {
@@ -275,10 +301,13 @@ func (s *Store) Workspace(id string) (Workspace, bool) {
 }
 
 // UpsertWorkspace adds or replaces a workspace and returns the persisted list.
+// Adding a workspace when the store is full fails instead of silently dropping
+// the new entry during sanitization.
 func (s *Store) UpsertWorkspace(next Workspace) ([]Workspace, error) {
 	s.mu.Lock()
-	data := s.data
-	data.Workspaces = cloneWorkspaces(s.data.Workspaces)
+	defer s.mu.Unlock()
+
+	data := cloneSettings(s.data)
 	replaced := false
 	for index := range data.Workspaces {
 		if data.Workspaces[index].ID == next.ID {
@@ -288,35 +317,43 @@ func (s *Store) UpsertWorkspace(next Workspace) ([]Workspace, error) {
 		}
 	}
 	if !replaced {
+		if len(data.Workspaces) >= MaxWorkspaces {
+			return nil, fmt.Errorf("workspace limit reached (%d); delete one first", MaxWorkspaces)
+		}
 		data.Workspaces = append(data.Workspaces, next)
 	}
-	s.mu.Unlock()
-	if err := s.Save(data); err != nil {
+	if err := s.saveLocked(data); err != nil {
 		return nil, err
 	}
-	return s.Workspaces(), nil
+	persisted := cloneWorkspaces(s.data.Workspaces)
+	for _, item := range persisted {
+		if item.ID == next.ID {
+			return persisted, nil
+		}
+	}
+	return nil, fmt.Errorf("workspace %q was not persisted", next.ID)
 }
 
 func (s *Store) DeleteWorkspace(id string) ([]Workspace, error) {
 	s.mu.Lock()
-	workspaces := cloneWorkspaces(s.data.Workspaces)
-	kept := workspaces[:0]
-	for _, item := range workspaces {
+	defer s.mu.Unlock()
+
+	current := cloneWorkspaces(s.data.Workspaces)
+	kept := make([]Workspace, 0, len(current))
+	for _, item := range current {
 		if item.ID != id {
 			kept = append(kept, item)
 		}
 	}
-	if len(kept) == len(workspaces) {
-		s.mu.Unlock()
-		return cloneWorkspaces(workspaces), nil
+	if len(kept) == len(current) {
+		return cloneWorkspaces(s.data.Workspaces), nil
 	}
-	data := s.data
+	data := cloneSettings(s.data)
 	data.Workspaces = kept
-	s.mu.Unlock()
-	if err := s.Save(data); err != nil {
+	if err := s.saveLocked(data); err != nil {
 		return nil, err
 	}
-	return s.Workspaces(), nil
+	return cloneWorkspaces(s.data.Workspaces), nil
 }
 
 func writeAtomic(path string, data []byte, mode os.FileMode) error {
