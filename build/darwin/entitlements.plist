@@ -1,0 +1,11 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- The app checks GitHub releases and drives CLIs that may fetch
+	     plugins, so it needs outbound network access. Distribution builds
+	     are not sandboxed, so no sandbox entitlements are required. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+</dict>
+</plist>
