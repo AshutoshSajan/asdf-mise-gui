@@ -1,12 +1,23 @@
 package version
 
 import (
+	"crypto/ed25519"
 	"encoding/json"
 	"os"
 	"regexp"
 	"strings"
 	"testing"
 )
+
+func TestEmbeddedUpdatePublicKeyParses(t *testing.T) {
+	key, err := UpdatePublicKey()
+	if err != nil {
+		t.Fatalf("UpdatePublicKey() error = %v", err)
+	}
+	if len(key) != ed25519.PublicKeySize {
+		t.Fatalf("public key has %d bytes, want %d", len(key), ed25519.PublicKeySize)
+	}
+}
 
 func TestVersionIsSemantic(t *testing.T) {
 	pattern := regexp.MustCompile(`^[0-9]+\.[0-9]+\.[0-9]+(?:[-.][0-9A-Za-z.-]+)?$`)

@@ -52,6 +52,7 @@ type UpdateStatus struct {
 	AssetName      string `json:"assetName"`
 	AssetSize      int64  `json:"assetSize"`
 	Checksummed    bool   `json:"checksummed"`
+	Signed         bool   `json:"signed"`
 	State          string `json:"state"`
 	Error          string `json:"error"`
 	CheckedAt      string `json:"checkedAt"`
@@ -87,7 +88,12 @@ func (s *UpdateService) ServiceStartup(_ context.Context, _ application.ServiceO
 	s.configuredErr = ""
 	s.mu.Unlock()
 
-	provider, err := github.New(github.Config{
+	publicKey, err := version.UpdatePublicKey()
+	if err != nil {
+		s.setConfiguredError(err)
+		return nil
+	}
+	githubProvider, err := github.New(github.Config{
 		Repository:    updateRepository,
 		ChecksumAsset: updateChecksumAsset,
 		AssetMatcher:  updateAssetMatcher,
@@ -98,7 +104,10 @@ func (s *UpdateService) ServiceStartup(_ context.Context, _ application.ServiceO
 	}
 	if err := app.Updater.Init(updater.Config{
 		CurrentVersion: version.Version,
-		Providers:      []updater.Provider{provider},
+		Providers:      []updater.Provider{newSignedProvider(githubProvider, publicKey)},
+		// Pinning the key makes signatures mandatory: an unsigned or
+		// mismatched release is rejected before it can replace the AppImage.
+		PublicKey: version.UpdatePublicKeyPEM,
 		// The app renders its own banner, update card, and progress dialog.
 		Window: updater.WindowNone,
 	}); err != nil {
@@ -158,20 +167,7 @@ func (s *UpdateService) Check() UpdateStatus {
 		return s.failWithTime(checkedAt, err.Error())
 	}
 	if release == nil {
-		s.mu.Lock()
-		s.pending = nil
-		s.status.LatestVersion = ""
-		s.status.ReleaseName = ""
-		s.status.ReleaseNotes = ""
-		s.status.ReleaseURL = latestReleasePageURL
-		s.status.PublishedAt = ""
-		s.status.AssetName = ""
-		s.status.AssetSize = 0
-		s.status.Checksummed = false
-		s.status.State = "up-to-date"
-		s.status.Error = ""
-		s.status.CheckedAt = checkedAt
-		s.mu.Unlock()
+		s.markUpToDate(checkedAt)
 		return s.Status()
 	}
 
@@ -188,11 +184,33 @@ func (s *UpdateService) Check() UpdateStatus {
 	s.status.AssetName = release.Artifact.Filename
 	s.status.AssetSize = release.Artifact.Size
 	s.status.Checksummed = hasChecksum(release)
+	s.status.Signed = hasSignature(release)
 	s.status.State = "available"
 	s.status.Error = ""
 	s.status.CheckedAt = checkedAt
 	s.mu.Unlock()
 	return s.Status()
+}
+
+// markUpToDate records that GitHub reported no release newer than the running
+// build. The provider returns no tag in that case, so "Latest" becomes the
+// version we are running; leaving it blank made the Settings card look broken.
+func (s *UpdateService) markUpToDate(checkedAt string) {
+	s.mu.Lock()
+	s.pending = nil
+	s.status.LatestVersion = version.Version
+	s.status.ReleaseName = ""
+	s.status.ReleaseNotes = ""
+	s.status.ReleaseURL = latestReleasePageURL
+	s.status.PublishedAt = ""
+	s.status.AssetName = ""
+	s.status.AssetSize = 0
+	s.status.Checksummed = false
+	s.status.Signed = false
+	s.status.State = "up-to-date"
+	s.status.Error = ""
+	s.status.CheckedAt = checkedAt
+	s.mu.Unlock()
 }
 
 // Install downloads, verifies, swaps, and restarts. It is only supported for
@@ -221,7 +239,7 @@ func (s *UpdateService) Install() (UpdateStatus, error) {
 		return s.Status(), err
 	}
 	if !installable(pending) {
-		err := fmt.Errorf("release %s does not publish an installable AppImage with a checksum", pending.Version)
+		err := fmt.Errorf("release %s does not publish an installable AppImage with a checksum and signature", pending.Version)
 		return s.fail(err.Error()), err
 	}
 
@@ -264,6 +282,7 @@ func (s *UpdateService) failWithTime(checkedAt, message string) UpdateStatus {
 	s.status.AssetName = ""
 	s.status.AssetSize = 0
 	s.status.Checksummed = false
+	s.status.Signed = false
 	s.status.State = "error"
 	s.status.Error = message
 	s.status.CheckedAt = checkedAt
@@ -278,7 +297,8 @@ func (s *UpdateService) decorate(status UpdateStatus) UpdateStatus {
 	status.Installable = status.CanSelfUpdate &&
 		status.LatestVersion != "" &&
 		strings.HasSuffix(strings.ToLower(status.AssetName), ".appimage") &&
-		status.Checksummed
+		status.Checksummed &&
+		status.Signed
 	if status.ReleaseURL == "" {
 		status.ReleaseURL = latestReleasePageURL
 	}
@@ -301,7 +321,8 @@ func canSelfUpdate() bool {
 func installable(release *updater.Release) bool {
 	return release != nil &&
 		strings.HasSuffix(strings.ToLower(release.Artifact.Filename), ".appimage") &&
-		hasChecksum(release)
+		hasChecksum(release) &&
+		hasSignature(release)
 }
 
 func hasChecksum(release *updater.Release) bool {

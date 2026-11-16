@@ -120,6 +120,7 @@ export interface UpdateStatus {
     "assetName": string;
     "assetSize": number;
     "checksummed": boolean;
+    "signed": boolean;
     "state": string;
     "error": string;
     "checkedAt": string;

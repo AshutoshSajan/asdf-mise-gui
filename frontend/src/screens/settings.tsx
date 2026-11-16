@@ -712,16 +712,34 @@ export function Settings() {
               <div>
                 <CardTitle>Updates</CardTitle>
                 <p className="mt-1 text-[11px] leading-relaxed text-muted">
-                  Checks GitHub Releases at launch and on demand. The AppImage verifies a SHA-256 checksum and updates in
-                  place; every other build links to the release download.
+                  Checks GitHub Releases at launch and on demand. The AppImage verifies a SHA-256 checksum and Ed25519
+                  signature and updates in place; every other build links to the release download.
                 </p>
               </div>
-              <Badge variant={updateBadgeVariant(updateState)}>{updateBadgeLabel(updateState)}</Badge>
+              <Badge className="shrink-0 whitespace-nowrap" variant={updateBadgeVariant(updateState)}>
+                {updateBadgeLabel(updateState)}
+              </Badge>
             </CardHeader>
             <CardContent className="space-y-3 pt-3">
               <div className="grid grid-cols-2 gap-3 rounded-lg border border-line-soft bg-canvas/30 px-3 py-2.5">
                 <VersionCell label="Current" value={updater?.currentVersion || status.data?.appVersion || "—"} />
-                <VersionCell label="Latest" value={updater?.latestVersion || "—"} />
+                <VersionCell
+                  label="Latest"
+                  value={
+                    updater?.latestVersion ||
+                    (updateState === "up-to-date" ? updater?.currentVersion : "") ||
+                    "—"
+                  }
+                />
+                <div className="col-span-2 flex items-center justify-between gap-3 border-t border-line-soft pt-2 text-[10px]">
+                  <span className="text-faint">Last checked</span>
+                  <span
+                    className="truncate font-mono text-muted"
+                    title={updater?.checkedAt ? new Date(updater.checkedAt).toISOString() : undefined}
+                  >
+                    {updater?.checkedAt ? new Date(updater.checkedAt).toLocaleString() : "Never"}
+                  </span>
+                </div>
               </div>
 
               {updateState === "error" && updater?.error ? (
@@ -751,6 +769,7 @@ export function Settings() {
                           : "Published on GitHub Releases"}
                         {updater?.assetName ? ` · ${updater.assetName}` : ""}
                         {updater?.assetSize ? ` · ${formatBytes(updater.assetSize)}` : ""}
+                        {updater?.signed ? " · Ed25519 signed" : ""}
                       </p>
                     </div>
                   </div>
@@ -794,7 +813,7 @@ export function Settings() {
               <div className="flex items-start gap-2 rounded-lg border border-line-soft bg-canvas/30 px-3 py-2.5 text-[10.5px] leading-relaxed text-muted">
                 <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-accent" />
                 {updater?.canSelfUpdate
-                  ? "Downloads are verified against the release's SHA-256 checksum before the AppImage is replaced. Settings and projects are kept."
+                  ? "Downloads are verified against the release's SHA-256 checksum and Ed25519 signature before the AppImage is replaced. Settings and projects are kept."
                   : "This build cannot replace itself. Downloading opens GitHub Releases; settings and projects stay untouched."}
               </div>
 
