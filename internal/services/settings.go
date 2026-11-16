@@ -41,10 +41,9 @@ func (s *SettingsService) Get() SettingsView {
 	}
 }
 
+// Save persists the user-controlled settings fields without replacing recent
+// projects or workspaces, which can change concurrently.
 func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
-	existing := s.rt.Settings()
-	next.RecentProjects = existing.RecentProjects
-	next.Workspaces = existing.Workspaces
 	next.RunnerMode = asdf.NormalizeRunnerMode(next.RunnerMode)
 	next.WSLDistro = strings.TrimSpace(next.WSLDistro)
 
@@ -128,7 +127,17 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 		}
 	}
 
-	if _, err := s.rt.SaveSettings(next); err != nil {
+	if _, err := s.rt.UpdateSettings(func(current *settings.Settings) error {
+		current.Engine = next.Engine
+		current.BinaryPath = next.BinaryPath
+		current.DataDir = next.DataDir
+		current.DefaultProjectDir = next.DefaultProjectDir
+		current.Theme = next.Theme
+		current.CheckForUpdates = next.CheckForUpdates
+		current.RunnerMode = next.RunnerMode
+		current.WSLDistro = next.WSLDistro
+		return nil
+	}); err != nil {
 		return s.Get(), err
 	}
 	return s.Get(), nil
@@ -157,15 +166,15 @@ func (s *SettingsService) WSLDistros() ([]string, error) {
 }
 
 func (s *SettingsService) Reset() (SettingsView, error) {
-	next := s.rt.Settings()
-	next.Engine = "auto"
-	next.BinaryPath = ""
-	next.DataDir = ""
-	next.DefaultProjectDir = ""
-	next.RunnerMode = asdf.RunnerAuto
-	next.WSLDistro = ""
-	next.Workspaces = s.rt.Settings().Workspaces
-	if _, err := s.rt.SaveSettings(next); err != nil {
+	if _, err := s.rt.UpdateSettings(func(next *settings.Settings) error {
+		next.Engine = "auto"
+		next.BinaryPath = ""
+		next.DataDir = ""
+		next.DefaultProjectDir = ""
+		next.RunnerMode = asdf.RunnerAuto
+		next.WSLDistro = ""
+		return nil
+	}); err != nil {
 		return s.Get(), err
 	}
 	return s.Get(), nil
