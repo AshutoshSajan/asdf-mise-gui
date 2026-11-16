@@ -9,8 +9,11 @@
 - Wait for CI to pass, then merge the topic PR into `dev`.
 - Promote `dev` to `master` through a separate `dev` → `master` pull request.
   Do not fast-forward `master` locally and push.
-- Tags and releases are cut from `master` only after the promotion PR is merged
-  and CI is green.
+- **Never merge a pull request that targets `master`.** Promotion PRs are merged
+  manually by the repository owner. Open the PR, verify CI, and leave it open
+  for their review. Do not run `gh pr merge` on a `master` PR.
+- Tags and releases are cut from `master` only after the owner merges the
+  promotion PR and CI is green.
 
 ## Local verification
 
