@@ -133,9 +133,11 @@ every asset.
 ### macOS
 
 Download `asdf-mise-gui-darwin-universal.dmg`, open it, and drag
-**asdf-mise-gui** into Applications. The build is ad-hoc signed but not
-notarized, so Gatekeeper warns on first launch. Right-click the app and choose
-**Open**, or clear the quarantine flag:
+**asdf-mise-gui** into Applications. Official releases are Developer ID signed
+and notarized when the repository signing credentials are configured; unsigned
+or community builds are ad-hoc signed and Gatekeeper warns on first launch. In
+that case, right-click the app and choose **Open**, or clear the quarantine
+flag:
 
 ```bash
 xattr -dr com.apple.quarantine "/Applications/asdf-mise-gui.app"
@@ -145,8 +147,9 @@ xattr -dr com.apple.quarantine "/Applications/asdf-mise-gui.app"
 
 Download `asdf-mise-gui-windows-amd64-installer.exe` and run it. The installer
 bundles the WebView2 bootstrapper. A portable
-`asdf-mise-gui-windows-amd64.exe` is published alongside it; the installer and
-the portable build are unsigned, so SmartScreen may warn on first launch.
+`asdf-mise-gui-windows-amd64.exe` is published alongside it. Both are
+Authenticode signed when the repository certificate secrets are configured;
+unsigned or community builds may trigger SmartScreen on first launch.
 
 [mise](https://mise.jdx.dev/getting-started.html) is the recommended engine on
 native Windows. asdf itself is a Unix shell tool; asdf users should run the
@@ -555,6 +558,11 @@ builds every platform in parallel, then publishes one release:
 Pull requests that touch the release pipeline build all three platforms without
 publishing, so packaging regressions fail before a tag is cut.
 
+macOS and Windows artifacts are signed and notarized when the repository
+signing secrets are present. See [Release signing](docs/release-signing.md) for
+the secrets, export steps, and verification commands. Without them, the workflow
+publishes the ad-hoc signed macOS DMG and unsigned Windows binaries.
+
 1. Bump every versioned file with the repository script, then commit:
 
    ```bash
@@ -690,7 +698,7 @@ integration.
 - [x] Tag-driven Linux AppImage releases
 - [x] macOS DMG and Windows installer releases
 - [x] In-app update checks with verified AppImage self-update
-- [ ] Signed and notarized macOS and Windows artifacts
+- [x] Signed and notarized macOS and Windows artifacts
 - [ ] WSL2 runner bridge
 - [ ] Multi-project workspaces and richer version comparisons
 
