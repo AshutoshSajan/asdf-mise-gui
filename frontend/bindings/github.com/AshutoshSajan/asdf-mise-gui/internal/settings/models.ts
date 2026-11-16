@@ -12,6 +12,17 @@ export interface Settings {
     "theme": string;
     "checkForUpdates": boolean;
     "recentProjects": string[] | null;
+    "workspaces": Workspace[] | null;
     "runnerMode": string;
     "wslDistro": string;
+}
+
+/**
+ * Workspace groups project directories so the app can report on several
+ * projects without opening them one at a time.
+ */
+export interface Workspace {
+    "id": string;
+    "name": string;
+    "projects": string[] | null;
 }

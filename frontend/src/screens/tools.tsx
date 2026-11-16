@@ -16,9 +16,9 @@ import {
   TriangleAlert,
 } from "lucide-react";
 import { useQueryClient } from "@tanstack/react-query";
-import type { ToolView } from "../lib/bindings";
+import type { ToolView, VersionComparison } from "../lib/bindings";
 import { ProjectService, ToolsService } from "../lib/bindings";
-import { useAvailableVersions, useLatestVersions, useStatus, useTools } from "../lib/query";
+import { useAvailableVersions, useStatus, useTools, useVersionComparisons } from "../lib/query";
 import { useQueueOperation } from "../lib/actions";
 import { navigate } from "../lib/route";
 import { errorMessage, pluralize, shortenPath, splitVersions } from "../lib/format";
@@ -50,7 +50,7 @@ import { Input, Label } from "../components/ui/input";
 import { useToast } from "../components/ui/toast";
 import { Hint } from "../components/ui/tooltip";
 
-type Filter = "all" | "installed" | "missing" | "unset";
+type Filter = "all" | "installed" | "missing" | "unset" | "outdated";
 
 type InstallTarget = {
   tool: string;
@@ -71,7 +71,7 @@ type UninstallTarget = {
 
 export function Tools() {
   const tools = useTools();
-  const latest = useLatestVersions();
+  const comparisons = useVersionComparisons();
   const status = useStatus();
   const queue = useQueueOperation();
   const queryClient = useQueryClient();
@@ -88,9 +88,21 @@ export function Tools() {
   const engineName = isMise ? "mise" : "asdf";
   const configName = isMise ? "mise config" : ".tool-versions";
 
+  const comparisonMap = useMemo(
+    () => new Map<string, VersionComparison>((comparisons.data?.items ?? []).map((item) => [item.tool, item])),
+    [comparisons.data],
+  );
   const latestMap = useMemo(
-    () => new Map((latest.data ?? []).map((item) => [item.tool, item])),
-    [latest.data],
+    () =>
+      new Map(
+        (comparisons.data?.items ?? [])
+          .filter((item) => item.latest)
+          .map((item) => [
+            item.tool,
+            { version: item.latest, installed: item.latestInstalled, known: true },
+          ]),
+      ),
+    [comparisons.data],
   );
 
   const rows = useMemo(() => {
@@ -102,6 +114,7 @@ export function Tools() {
       if (filter === "installed" && (tool.installed?.length ?? 0) === 0) return false;
       if (filter === "missing" && !missing) return false;
       if (filter === "unset" && !unset) return false;
+      if (filter === "outdated" && comparisonMap.get(tool.name)?.status !== "outdated") return false;
       if (!needle) return true;
       return (
         tool.name.toLowerCase().includes(needle) ||
@@ -109,7 +122,7 @@ export function Tools() {
         (tool.current ?? []).some((version) => version.toLowerCase().includes(needle))
       );
     });
-  }, [tools.data, query, filter]);
+  }, [tools.data, query, filter, comparisonMap]);
 
   const totalVersions = useMemo(
     () => (tools.data ?? []).reduce((count, tool) => count + (tool.installed?.length ?? 0), 0),
@@ -122,6 +135,7 @@ export function Tools() {
       ).length,
     [tools.data],
   );
+  const outdatedCount = comparisons.data?.outdatedCount ?? 0;
 
   const openInstall = (tool?: ToolView, version?: string) => {
     setInstallTarget({
@@ -149,7 +163,7 @@ export function Tools() {
 
   const refresh = () => {
     void queryClient.invalidateQueries({ queryKey: ["tools"] });
-    void queryClient.invalidateQueries({ queryKey: ["latest"] });
+    void queryClient.invalidateQueries({ queryKey: ["version-comparisons"] });
   };
 
   return (
@@ -162,7 +176,7 @@ export function Tools() {
           <>
             <Hint label="Reload tools and latest versions">
               <Button variant="ghost" size="icon" onClick={refresh} aria-label="Refresh tools">
-                <RefreshCw className={cn("size-4", (tools.isFetching || latest.isFetching) && "animate-spin")} />
+                <RefreshCw className={cn("size-4", (tools.isFetching || comparisons.isFetching) && "animate-spin")} />
               </Button>
             </Hint>
             <Button size="sm" onClick={() => openInstall()}>
@@ -190,6 +204,7 @@ export function Tools() {
               ["all", "All"],
               ["installed", "Installed"],
               ["missing", "Missing"],
+              ["outdated", "Outdated"],
               ["unset", "Unset"],
             ] as const
           ).map(([value, label]) => (
@@ -217,8 +232,20 @@ export function Tools() {
               <span className="font-mono">{missingCount}</span> missing
             </span>
           ) : null}
+          {outdatedCount > 0 ? (
+            <span className="text-info">
+              <span className="font-mono">{outdatedCount}</span> outdated
+            </span>
+          ) : null}
         </div>
       </div>
+
+      {comparisons.data?.warning ? (
+        <div className="flex items-start gap-2 rounded-lg border border-warn/20 bg-warn/5 px-3 py-2 text-[11px] leading-relaxed text-warn">
+          <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+          <span>{comparisons.data.warning}</span>
+        </div>
+      ) : null}
 
       {tools.isError ? (
         <InlineEmpty>{errorMessage(tools.error)}</InlineEmpty>
@@ -270,6 +297,7 @@ export function Tools() {
                 key={tool.name}
                 tool={tool}
                 latest={latestMap.get(tool.name)}
+                comparison={comparisonMap.get(tool.name)}
                 configName={configName}
                 onInstall={openInstall}
                 onPin={openPin}
@@ -326,6 +354,7 @@ export function Tools() {
 function ToolRow({
   tool,
   latest,
+  comparison,
   configName,
   onInstall,
   onPin,
@@ -334,6 +363,7 @@ function ToolRow({
 }: {
   tool: ToolView;
   latest?: { version: string; installed: boolean; known: boolean };
+  comparison?: VersionComparison;
   configName: string;
   onInstall: (tool?: ToolView, version?: string) => void;
   onPin: (tool: string, version: string, scope: "global" | "local", versions: string[]) => void;
@@ -363,12 +393,24 @@ function ToolRow({
           <div className="flex flex-wrap items-center gap-2">
             <span className="font-mono text-[13px] font-medium text-ink">{tool.name}</span>
             <CurrentBadge tool={tool} />
-            {latest?.known && !latest.installed ? (
+            {comparison?.status === "outdated" ? (
+              <Badge variant="info" className="text-[10px]">
+                behind latest {comparison.latest}
+              </Badge>
+            ) : comparison?.status === "current" && comparison.latest ? (
+              <Badge variant="outline" className="text-[10px]">
+                latest {comparison.latest}
+              </Badge>
+            ) : latest?.known && !latest.installed ? (
               <Badge variant="outline" className="text-[10px]">
                 latest {latest.version}
               </Badge>
             ) : null}
-            {!latest?.known && installed.length > 0 ? null : null}
+            {comparison?.latestInstalled && comparison.status === "outdated" ? (
+              <Badge variant="success" className="text-[10px]">
+                latest installed
+              </Badge>
+            ) : null}
           </div>
 
           <div className="mt-1 flex flex-wrap items-center gap-x-3 gap-y-1 text-[11px] text-faint">
@@ -384,6 +426,17 @@ function ToolRow({
               <span>not resolved in this context</span>
             )}
           </div>
+
+          {comparison && (comparison.status === "outdated" || comparison.status === "missing") ? (
+            <p
+              className={cn(
+                "mt-1 text-[11px] leading-relaxed",
+                comparison.status === "missing" ? "text-danger" : "text-info",
+              )}
+            >
+              {comparison.reason}
+            </p>
+          ) : null}
 
           {installed.length > 0 ? (
             <div className="mt-2.5 flex flex-wrap gap-1.5">
@@ -450,6 +503,17 @@ function ToolRow({
               Install missing
             </Button>
           ) : null}
+          {comparison?.status === "outdated" ? (
+            <Button
+              size="sm"
+              variant="secondary"
+              className="h-7 border-info/30 text-info hover:bg-info/10 hover:text-info"
+              onClick={() => onInstall(tool, comparison.latest)}
+            >
+              <Download className="size-3" />
+              Update
+            </Button>
+          ) : null}
           <Button size="sm" variant="secondary" className="h-7" onClick={() => onInstall(tool)}>
             <Download className="size-3" />
             Install
@@ -470,6 +534,16 @@ function ToolRow({
                 <DropdownMenuItem onClick={() => onPin(tool.name, versionsForPin[0], "global", versionsForPin)}>
                   <Pin className="size-3.5" />
                   Pin version
+                </DropdownMenuItem>
+              ) : null}
+              {comparison?.status === "outdated" && comparison.latest ? (
+                <DropdownMenuItem
+                  onClick={() =>
+                    onPin(tool.name, comparison.latest, "global", [...versionsForPin, comparison.latest])
+                  }
+                >
+                  <Pin className="size-3.5" />
+                  Pin latest globally
                 </DropdownMenuItem>
               ) : null}
               <DropdownMenuSeparator />

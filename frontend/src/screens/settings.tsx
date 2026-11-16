@@ -92,6 +92,7 @@ export function Settings() {
     theme: readStoredTheme(),
     checkForUpdates: true,
     recentProjects: [],
+    workspaces: [],
     runnerMode: "auto",
     wslDistro: "",
   });

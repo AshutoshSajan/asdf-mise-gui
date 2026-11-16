@@ -44,6 +44,7 @@ func (s *SettingsService) Get() SettingsView {
 func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 	existing := s.rt.Settings()
 	next.RecentProjects = existing.RecentProjects
+	next.Workspaces = existing.Workspaces
 	next.RunnerMode = asdf.NormalizeRunnerMode(next.RunnerMode)
 	next.WSLDistro = strings.TrimSpace(next.WSLDistro)
 
@@ -163,6 +164,7 @@ func (s *SettingsService) Reset() (SettingsView, error) {
 	next.DefaultProjectDir = ""
 	next.RunnerMode = asdf.RunnerAuto
 	next.WSLDistro = ""
+	next.Workspaces = s.rt.Settings().Workspaces
 	if _, err := s.rt.SaveSettings(next); err != nil {
 		return s.Get(), err
 	}

@@ -1,6 +1,7 @@
 import {
   Boxes,
   FolderGit2,
+  FolderTree,
   LayoutDashboard,
   Package,
   Settings2,
@@ -17,6 +18,7 @@ const NAV_ITEMS = [
   { path: "/tools", label: "Tools", icon: Boxes },
   { path: "/plugins", label: "Plugins", icon: Package },
   { path: "/project", label: "Project", icon: FolderGit2 },
+  { path: "/workspaces", label: "Workspaces", icon: FolderTree },
   { path: "/operations", label: "Operations", icon: Terminal },
   { path: "/settings", label: "Settings", icon: Settings2 },
 ];

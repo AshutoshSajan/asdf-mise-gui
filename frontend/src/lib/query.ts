@@ -7,6 +7,7 @@ import {
   SettingsService,
   ToolsService,
   UpdateService,
+  WorkspaceService,
 } from "./bindings";
 
 export const queryKeys = {
@@ -22,6 +23,9 @@ export const queryKeys = {
   diagnostics: ["diagnostics"] as const,
   available: (tool: string) => ["available", tool] as const,
   latest: ["latest"] as const,
+  comparisons: ["version-comparisons"] as const,
+  workspaces: ["workspaces"] as const,
+  workspace: (id: string) => ["workspace", id] as const,
   update: ["update"] as const,
   wslDistros: ["wsl-distros"] as const,
 };
@@ -154,6 +158,31 @@ export function useLatestVersions() {
   });
 }
 
+export function useVersionComparisons() {
+  return useQuery({
+    queryKey: queryKeys.comparisons,
+    queryFn: () => ToolsService.Compare(),
+    staleTime: 60_000,
+  });
+}
+
+export function useWorkspaces() {
+  return useQuery({
+    queryKey: queryKeys.workspaces,
+    queryFn: () => WorkspaceService.List(),
+    staleTime: 5_000,
+  });
+}
+
+export function useWorkspace(id: string | null) {
+  return useQuery({
+    queryKey: queryKeys.workspace(id ?? ""),
+    queryFn: () => WorkspaceService.Scan(id as string),
+    enabled: Boolean(id),
+    staleTime: 15_000,
+  });
+}
+
 export function useUpdateStatus() {
   return useQuery({
     queryKey: queryKeys.update,
@@ -194,6 +223,9 @@ export function useInvalidateAppData() {
     void queryClient.invalidateQueries({ queryKey: queryKeys.plugins });
     void queryClient.invalidateQueries({ queryKey: ["project"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.latest });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.comparisons });
+    void queryClient.invalidateQueries({ queryKey: queryKeys.workspaces });
+    void queryClient.invalidateQueries({ queryKey: ["workspace"] });
     void queryClient.invalidateQueries({ queryKey: queryKeys.recent });
   };
 }

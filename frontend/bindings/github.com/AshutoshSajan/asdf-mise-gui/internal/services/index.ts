@@ -8,6 +8,7 @@ import * as ProjectService from "./projectservice.js";
 import * as SettingsService from "./settingsservice.js";
 import * as ToolsService from "./toolsservice.js";
 import * as UpdateService from "./updateservice.js";
+import * as WorkspaceService from "./workspaceservice.js";
 export {
     ManagerService,
     OperationService,
@@ -15,7 +16,8 @@ export {
     ProjectService,
     SettingsService,
     ToolsService,
-    UpdateService
+    UpdateService,
+    WorkspaceService
 };
 
 export type {
@@ -26,5 +28,10 @@ export type {
     SettingsView,
     Status,
     ToolView,
-    UpdateStatus
+    UpdateStatus,
+    VersionComparison,
+    VersionComparisonView,
+    WorkspaceInput,
+    WorkspaceProjectView,
+    WorkspaceView
 } from "./models.js";
