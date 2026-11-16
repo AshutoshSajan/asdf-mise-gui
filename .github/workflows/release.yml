@@ -14,6 +14,7 @@ on:
       - "build/linux/**"
       - "build/windows/**"
       - "scripts/set-version.mjs"
+      - "scripts/sign-release.mjs"
       - "internal/version/**"
   workflow_dispatch:
 
@@ -422,6 +423,21 @@ jobs:
           rm -f checksums.txt
           sha256sum -- * > checksums.txt
           cat checksums.txt
+
+      # The app pins the Ed25519 public key in internal/version, so a release
+      # without signatures would be rejected by every current build. Fail the
+      # publish instead of shipping one.
+      - name: Sign release artifacts
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: |
+          set -euo pipefail
+          if [ -z "${UPDATE_SIGNING_KEY:-}" ]; then
+            echo "::error::UPDATE_SIGNING_KEY is not configured. Add the Ed25519 private key before tagging."
+            exit 1
+          fi
+          node scripts/sign-release.mjs dist
+          node scripts/sign-release.mjs --verify dist
 
       - name: Publish release
         uses: softprops/action-gh-release@v3

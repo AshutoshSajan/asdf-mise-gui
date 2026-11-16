@@ -6,6 +6,7 @@ import (
 	"runtime"
 	"testing"
 
+	"github.com/AshutoshSajan/asdf-mise-gui/internal/version"
 	"github.com/wailsapp/wails/v3/pkg/updater"
 	"github.com/wailsapp/wails/v3/pkg/updater/providers/github"
 )
@@ -73,16 +74,18 @@ func TestCanSelfUpdateRequiresAppImageEnvironment(t *testing.T) {
 	}
 }
 
-func TestInstallableRequiresAppImageAndChecksum(t *testing.T) {
+func TestInstallableRequiresAppImageChecksumAndSignature(t *testing.T) {
 	release := &updater.Release{
 		Artifact: updater.Artifact{Filename: "asdf-mise-gui-linux-x86_64.AppImage"},
 		Verification: &updater.Verification{
-			DigestAlgo: "sha256",
-			Digest:     []byte{0x01},
+			DigestAlgo:    "sha256",
+			Digest:        []byte{0x01},
+			SignatureAlgo: "ed25519",
+			Signature:     []byte{0x02},
 		},
 	}
 	if !installable(release) {
-		t.Fatal("expected a checksummed AppImage to be installable")
+		t.Fatal("expected a checksummed and signed AppImage to be installable")
 	}
 
 	release.Verification = nil
@@ -91,9 +94,37 @@ func TestInstallableRequiresAppImageAndChecksum(t *testing.T) {
 	}
 
 	release.Verification = &updater.Verification{DigestAlgo: "sha256", Digest: []byte{0x01}}
+	if installable(release) {
+		t.Fatal("an unsigned release must not be installable")
+	}
+
+	release.Verification = &updater.Verification{
+		DigestAlgo:    "sha256",
+		Digest:        []byte{0x01},
+		SignatureAlgo: "ed25519",
+		Signature:     []byte{0x02},
+	}
 	release.Artifact.Filename = "asdf-mise-gui-linux-x86_64.deb"
 	if installable(release) {
 		t.Fatal("a non-AppImage artifact must not be installable")
+	}
+}
+
+func TestUpToDateReportsRunningVersionAsLatest(t *testing.T) {
+	service := NewUpdateService(nil)
+	service.markUpToDate("2026-11-16T10:00:00Z")
+
+	if service.status.State != "up-to-date" {
+		t.Fatalf("state = %q, want up-to-date", service.status.State)
+	}
+	if service.status.LatestVersion != version.Version {
+		t.Fatalf("latestVersion = %q, want running version %q", service.status.LatestVersion, version.Version)
+	}
+	if service.status.CheckedAt != "2026-11-16T10:00:00Z" {
+		t.Fatalf("checkedAt = %q", service.status.CheckedAt)
+	}
+	if service.status.Error != "" {
+		t.Fatalf("error = %q, want empty", service.status.Error)
 	}
 }
 

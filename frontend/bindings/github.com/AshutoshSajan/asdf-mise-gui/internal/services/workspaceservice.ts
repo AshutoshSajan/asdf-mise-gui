@@ -34,6 +34,9 @@ export function InstallMissing(id: string): $CancellablePromise<ops$0.Operation[
     return $Call.ByID(565638682, id);
 }
 
+/**
+ * List returns the saved workspaces.
+ */
 export function List(): $CancellablePromise<settings$0.Workspace[] | null> {
     return $Call.ByID(3954443879);
 }
