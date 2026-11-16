@@ -39,6 +39,7 @@ func main() {
 	toolsService := services.NewToolsService(runtime)
 	pluginsService := services.NewPluginsService(runtime)
 	projectService := services.NewProjectService(runtime, toolsService)
+	workspaceService := services.NewWorkspaceService(runtime, projectService)
 	operationService := services.NewOperationService(runtime)
 	settingsService := services.NewSettingsService(runtime)
 	updateService := services.NewUpdateService(runtime)
@@ -52,6 +53,7 @@ func main() {
 			application.NewService(toolsService),
 			application.NewService(pluginsService),
 			application.NewService(projectService),
+			application.NewService(workspaceService),
 			application.NewService(operationService),
 			application.NewService(settingsService),
 			application.NewService(updateService),

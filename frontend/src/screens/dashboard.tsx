@@ -4,6 +4,7 @@ import {
   Boxes,
   ExternalLink,
   FolderGit2,
+  FolderTree,
   Layers,
   Package,
   RefreshCw,
@@ -301,6 +302,7 @@ export function Dashboard() {
             <CardContent className="grid gap-2 pt-3">
               <QuickAction icon={<Package className="size-4" />} label="Manage plugins" onClick={() => navigate("/plugins")} />
               <QuickAction icon={<Boxes className="size-4" />} label="Browse installed tools" onClick={() => navigate("/tools")} />
+              <QuickAction icon={<FolderTree className="size-4" />} label="Scan project workspaces" onClick={() => navigate("/workspaces")} />
               <QuickAction icon={<Terminal className="size-4" />} label="Open operation logs" onClick={() => navigate("/operations")} />
             </CardContent>
           </Card>

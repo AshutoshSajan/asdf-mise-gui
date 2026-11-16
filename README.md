@@ -45,7 +45,7 @@
 > **The short version.** asdf and mise are excellent at what they do. Remembering the exact incantation for every plugin is less excellent. asdf mise GUI gives both version managers a proper desktop home: installed versions, missing versions, plugin management, project pinning, and live command output — without replacing the engine underneath.
 
 > [!IMPORTANT]
-> **MVP complete.** Every screen — dashboard, tools, plugins, project, operations, and settings — is wired to the real asdf or mise CLI through typed Wails services. Tagged releases build an AppImage, DEB/RPM/Arch packages, a universal macOS DMG, and a Windows installer. Expect breaking changes before 1.0.
+> **MVP complete.** Every screen — dashboard, tools, plugins, project, workspaces, operations, and settings — is wired to the real asdf or mise CLI through typed Wails services. Tagged releases build an AppImage, DEB/RPM/Arch packages, a universal macOS DMG, and a Windows installer. Expect breaking changes before 1.0.
 
 ## Screenshots
 
@@ -311,9 +311,10 @@ files live under [`build/`](./build).
 
 - **Dashboard** — engine status, plugin and version counts, the active project's
   pinned tools, missing versions, and recent operations in one view.
-- **Tools** — browse every tool and installed version, see which versions are
-  currently resolved, load the full available version list, and install,
-  uninstall, or pin versions without typing a command.
+- **Tools** — browse every tool and installed version, compare active pins with
+  installed and latest releases, filter to outdated or missing tools, load the
+  full available version list, and install, uninstall, update, or pin versions
+  without typing a command.
 - **Plugins** — inspect installed plugins with their repository URLs and refs,
   search the asdf or mise registry, add a plugin by name or URL, update one or
   all plugins, and remove plugins you no longer need.
@@ -322,6 +323,10 @@ files live under [`build/`](./build).
   and install everything the project is missing. asdf edits preserve comments,
   ordering, CRLF line endings, and file permissions; mise TOML saves go through
   `mise use` so the real parser stays authoritative.
+- **Workspaces** — group related project directories and scan them together.
+  Each project reports its effective config file, inherited parent config,
+  resolved versions, missing tools, and warnings, with a single install action
+  that queues fixes for every affected project.
 - **Operations** — every mutation becomes an operation with a status, a live
   output stream, a cancel action, and a persisted log file. The queue shows what
   is running, what is waiting, and what failed.
@@ -350,7 +355,7 @@ files live under [`build/`](./build).
 flowchart TB
     subgraph Frontend["Frontend · React + TypeScript"]
         direction LR
-        UI["Dashboard · Tools · Plugins · Project · Operations · Settings"]
+        UI["Dashboard · Tools · Plugins · Project · Workspaces · Operations · Settings"]
     end
 
     subgraph Wails["Wails v3"]
@@ -537,7 +542,7 @@ same report without failing.
 ├── frontend/
 │   ├── src/
 │   │   ├── components/         # app shell, operation UI, Radix primitives
-│   │   ├── screens/            # dashboard, tools, plugins, project, operations, settings
+│   │   ├── screens/            # dashboard, tools, plugins, project, workspaces, operations, settings
 │   │   └── lib/                # bindings, query keys, routing, formatters
 │   └── bindings/               # generated from Go — do not edit
 ├── build/                      # Wails build tasks, packaging, platform assets
@@ -706,7 +711,7 @@ Linux AppImage inside WSL instead.
 - [x] In-app update checks with verified AppImage self-update
 - [x] Signed and notarized macOS and Windows artifacts
 - [x] WSL2 runner bridge
-- [ ] Multi-project workspaces and richer version comparisons
+- [x] Multi-project workspaces and richer version comparisons
 
 ## Contributing
 

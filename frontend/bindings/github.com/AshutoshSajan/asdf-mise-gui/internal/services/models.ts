@@ -127,3 +127,55 @@ export interface UpdateStatus {
     "canSelfUpdate": boolean;
     "installable": boolean;
 }
+
+export interface VersionComparison {
+    "tool": string;
+    "pinned": string[] | null;
+    "installed": string[] | null;
+    "latest": string;
+    "latestInstalled": boolean;
+    "status": string;
+    "reason": string;
+}
+
+export interface VersionComparisonView {
+    "items": VersionComparison[] | null;
+    "outdatedCount": number;
+    "missingCount": number;
+    "unpinnedCount": number;
+    "generatedAt": string;
+    "warning"?: string;
+}
+
+export interface WorkspaceInput {
+    "id": string;
+    "name": string;
+    "projects": string[] | null;
+}
+
+export interface WorkspaceProjectView {
+    "dir": string;
+    "name": string;
+    "exists": boolean;
+    "engine": string;
+    "configFile": string;
+    "configFormat": string;
+    "fileExists": boolean;
+    "fileInProject": boolean;
+    "usingParent": boolean;
+    "entries": asdf$0.ToolVersionEntry[] | null;
+    "current": asdf$0.CurrentTool[] | null;
+    "missing": string[] | null;
+    "warnings": string[] | null;
+    "pinnedCount": number;
+}
+
+export interface WorkspaceView {
+    "id": string;
+    "name": string;
+    "projects": WorkspaceProjectView[] | null;
+    "missing": string[] | null;
+    "pinnedCount": number;
+    "missingProjects": number;
+    "scannedAt": string;
+}
