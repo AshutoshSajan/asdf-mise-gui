@@ -47,6 +47,10 @@ export function Reset(): $CancellablePromise<$models.SettingsView> {
     return $Call.ByID(3774053004);
 }
 
+/**
+ * Save persists the user-controlled settings fields without replacing recent
+ * projects or workspaces, which can change concurrently.
+ */
 export function Save(next: settings$0.Settings): $CancellablePromise<$models.SettingsView> {
     return $Call.ByID(1040351028, next);
 }

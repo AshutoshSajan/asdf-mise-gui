@@ -128,7 +128,8 @@ sudo pacman -U ./asdf-mise-gui-linux-x86_64.pkg.tar.zst
 
 The DEB, RPM, and Arch packages depend on the distribution's GTK4 + WebKitGTK
 6.0 packages. Each release publishes a `checksums.txt` with SHA-256 digests for
-every asset.
+every asset. The publish job also uploads a base64 Ed25519 `.sig` sidecar for
+every artifact.
 
 ### macOS
 
@@ -185,10 +186,13 @@ newer release exists, a banner shows the version and its release notes. Nothing
 is downloaded until you choose **Update now**.
 
 On the AppImage build, the download is streamed to a staging file, verified
-against the release's `checksums.txt` (SHA-256), swapped into place, and the app
-restarts. A missing or mismatched checksum aborts the install and leaves the
-current AppImage untouched. Settings, projects, and asdf/mise data are not
-modified.
+against the release's `checksums.txt` (SHA-256) and the artifact's `.sig` file
+(Ed25519, checked against the public key embedded in the app), swapped into
+place, and the app restarts. A missing or mismatched checksum or signature
+aborts the install and leaves the current AppImage untouched. Because the key is
+pinned in the binary, replacing both an artifact and `checksums.txt` in a
+compromised release is not enough to pass verification. Settings, projects, and
+asdf/mise data are not modified.
 
 macOS, Windows, and Linux packages other than the AppImage cannot replace
 themselves. They show the same update notice but open the GitHub release page
@@ -331,8 +335,8 @@ files live under [`build/`](./build).
   output stream, a cancel action, and a persisted log file. The queue shows what
   is running, what is waiting, and what failed.
 - **Updates** — check GitHub Releases at launch or on demand, read release notes,
-  and let the AppImage verify a SHA-256 checksum and restart into the new build.
-  Other builds link to the release download page.
+  and let the AppImage verify a SHA-256 checksum and an Ed25519 signature before
+  restarting into the new build. Other builds link to the release download page.
 - **Settings & diagnostics** — choose asdf or mise (or auto-detect), override
   the binary or `ASDF_DATA_DIR`/`MISE_DATA_DIR`, choose a default project, follow
   the system theme or force dark/light, control launch update checks, and run
@@ -430,7 +434,7 @@ asdf mise GUI runs local commands on your behalf, so the boundaries are delibera
 | **Concurrent writes** | Mutations run through a single FIFO queue. `.tool-versions` and settings are written atomically; mise TOML writes go through `mise use`. |
 | **Interactive prompts** | Git terminal prompts are disabled so plugin operations cannot hang waiting for credentials. |
 | **External links** | Only `http://` and `https://` URLs are opened in the system browser. |
-| **Update verification** | Every release publishes SHA-256 digests for all assets in `checksums.txt`. AppImage self-update aborts unless the download matches its entry. |
+| **Update verification** | Every release publishes SHA-256 digests in `checksums.txt` and an Ed25519 `.sig` sidecar for every artifact. The public key is pinned in the app; AppImage self-update aborts unless both the digest and the signature verify. |
 | **Privacy** | The app has no telemetry. Its only own network call is the optional GitHub Releases update check; all other network activity comes from asdf, mise, and their plugins. |
 
 Logs may contain local paths and command output. They stay on your machine.
@@ -587,8 +591,13 @@ publishes the ad-hoc signed macOS DMG and unsigned Windows binaries.
 
 The workflow syncs the tag version into the build metadata with the same script,
 builds all three platforms, verifies the AppImage, and normalizes asset names.
-A final job writes `checksums.txt` with `sha256sum` and publishes every package
-in one GitHub release.
+A final job writes `checksums.txt` with `sha256sum`, signs every artifact with
+the `UPDATE_SIGNING_KEY` secret, verifies each signature against the pinned
+public key, and publishes every package and `.sig` sidecar in one GitHub
+release. A missing signing secret fails the publish rather than shipping a
+release that current builds would reject. After rotating the secret, run the
+**Verify update signing key** workflow: it compares the secret against the pinned
+public key and prints fingerprints only, so a bad tag is caught before it exists.
 
 The updater resolves the AppImage by `asdf-mise-gui-linux-<arch>.AppImage`. Keep
 that pattern when changing packaging, or AppImage self-update will stop finding
@@ -708,7 +717,7 @@ Linux AppImage inside WSL instead.
 - [x] CI for tests, builds, vulnerability scans, and dependency audits
 - [x] Tag-driven Linux AppImage releases
 - [x] macOS DMG and Windows installer releases
-- [x] In-app update checks with verified AppImage self-update
+- [x] In-app update checks with checksum- and Ed25519-verified AppImage self-update
 - [x] Signed and notarized macOS and Windows artifacts
 - [x] WSL2 runner bridge
 - [x] Multi-project workspaces and richer version comparisons

@@ -213,8 +213,8 @@ export function UpdateCenter() {
                 </div>
                 <div className="flex items-start gap-2 rounded-lg border border-line-soft bg-canvas/30 px-3 py-2.5 text-[10.5px] leading-relaxed text-muted">
                   <ShieldCheck className="mt-0.5 size-3.5 shrink-0 text-accent" />
-                  The download is checked against the release&apos;s SHA-256 checksum before the AppImage is replaced.
-                  The app restarts only after verification succeeds.
+                  The download is checked against the release&apos;s SHA-256 checksum and Ed25519 signature before the
+                  AppImage is replaced. The app restarts only after verification succeeds.
                 </div>
               </div>
             )}
