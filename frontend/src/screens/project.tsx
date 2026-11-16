@@ -26,7 +26,7 @@ import { useToast } from "../components/ui/toast";
 import { useProject, useOperation, useStatus, useTools, queryKeys } from "../lib/query";
 import { useQueueOperation } from "../lib/actions";
 import { basename, errorMessage, pluralize, shortenPath, splitVersions } from "../lib/format";
-import { navigate } from "../lib/route";
+import { navigate, useRoute } from "../lib/route";
 import { cn } from "../lib/utils";
 import {
   ManagerService,
@@ -38,11 +38,12 @@ import {
 export function Project() {
   const queryClient = useQueryClient();
   const { toast } = useToast();
+  const route = useRoute();
   const status = useStatus();
   const tools = useTools();
   const queue = useQueueOperation();
 
-  const [dir, setDir] = useState("");
+  const [dir, setDir] = useState(() => route.params.get("dir") ?? "");
   const [entries, setEntries] = useState<ToolVersionEntry[]>([]);
   const [dirty, setDirty] = useState(false);
   const [addTool, setAddTool] = useState("");

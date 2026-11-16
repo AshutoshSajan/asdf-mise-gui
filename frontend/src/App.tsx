@@ -21,6 +21,7 @@ import { Dashboard } from "./screens/dashboard";
 import { Tools } from "./screens/tools";
 import { Plugins } from "./screens/plugins";
 import { Project } from "./screens/project";
+import { Workspaces } from "./screens/workspaces";
 import { Operations } from "./screens/operations";
 import { Settings } from "./screens/settings";
 
@@ -38,6 +39,7 @@ const TITLES: Record<string, string> = {
   "/tools": "Tools",
   "/plugins": "Plugins",
   "/project": "Project",
+  "/workspaces": "Workspaces",
   "/operations": "Operations",
   "/settings": "Settings",
 };
@@ -123,6 +125,8 @@ function Shell() {
         return <Plugins />;
       case "/project":
         return <Project />;
+      case "/workspaces":
+        return <Workspaces />;
       case "/operations":
         return <Operations selectedID={route.params.get("op")} />;
       case "/settings":

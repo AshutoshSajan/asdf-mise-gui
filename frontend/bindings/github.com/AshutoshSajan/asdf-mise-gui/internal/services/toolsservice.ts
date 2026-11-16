@@ -25,6 +25,16 @@ export function Available(tool: string): $CancellablePromise<string[] | null> {
     return $Call.ByID(1622127840, tool);
 }
 
+/**
+ * Compare reports how the active pins, installed versions, and latest versions
+ * relate for every known tool. asdf reports a latest version for every plugin;
+ * mise's outdated command only reports tools that can move, so an omitted tool
+ * is treated as current rather than unknown.
+ */
+export function Compare(): $CancellablePromise<$models.VersionComparisonView> {
+    return $Call.ByID(3669481708);
+}
+
 export function Install(tool: string, version: string): $CancellablePromise<ops$0.Operation> {
     return $Call.ByID(3088613560, tool, version);
 }

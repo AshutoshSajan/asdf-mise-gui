@@ -6,6 +6,7 @@ export {
   SettingsService,
   ToolsService,
   UpdateService,
+  WorkspaceService,
 } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services";
 
 export type {
@@ -17,6 +18,11 @@ export type {
   Status as ManagerStatus,
   ToolView,
   UpdateStatus,
+  VersionComparison,
+  VersionComparisonView,
+  WorkspaceInput,
+  WorkspaceProjectView,
+  WorkspaceView,
 } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/services/models";
 
 export type { Detail, Operation, OutputLine } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/ops/models";
@@ -31,7 +37,7 @@ export type {
   ToolVersionEntry,
 } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/asdf/models";
 
-export type { Settings } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/settings/models";
+export type { Settings, Workspace as WorkspaceConfig } from "../../bindings/github.com/AshutoshSajan/asdf-mise-gui/internal/settings/models";
 
 export {
   OperationFinished,
