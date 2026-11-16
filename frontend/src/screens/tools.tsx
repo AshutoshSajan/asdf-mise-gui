@@ -240,7 +240,12 @@ export function Tools() {
         </div>
       </div>
 
-      {comparisons.data?.warning ? (
+      {comparisons.isError ? (
+        <div className="flex items-start gap-2 rounded-lg border border-warn/20 bg-warn/5 px-3 py-2 text-[11px] leading-relaxed text-warn">
+          <TriangleAlert className="mt-0.5 size-3 shrink-0" />
+          <span>{errorMessage(comparisons.error)}</span>
+        </div>
+      ) : comparisons.data?.warning ? (
         <div className="flex items-start gap-2 rounded-lg border border-warn/20 bg-warn/5 px-3 py-2 text-[11px] leading-relaxed text-warn">
           <TriangleAlert className="mt-0.5 size-3 shrink-0" />
           <span>{comparisons.data.warning}</span>

@@ -120,7 +120,13 @@ export function Workspaces() {
     }
   };
 
+  const discardDraft = () => {
+    if (!draft) return true;
+    return window.confirm("Discard unsaved workspace changes?");
+  };
+
   const startNew = () => {
+    if (!discardDraft()) return;
     setSelectedID(null);
     setDraft({ id: "", name: "", projects: [] });
   };
@@ -197,6 +203,7 @@ export function Workspaces() {
                     <button
                       key={workspace.id}
                       onClick={() => {
+                        if (!discardDraft()) return;
                         setDraft(null);
                         setSelectedID(workspace.id);
                       }}
