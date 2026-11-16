@@ -109,6 +109,27 @@ each signature against the committed public key before the release is
 published. It never prints key material. A missing or mismatched
 `UPDATE_SIGNING_KEY` fails the job.
 
+### Checking a new secret before tagging
+
+The publish job is tag-gated, so a mistyped secret is otherwise only caught once
+a tag exists, leaving that release without assets. Run **Actions → Verify update
+signing key → Run workflow** to compare the secret with the committed public key
+first. It prints a short fingerprint of each public key and nothing else, and it
+fails on a mismatch, a non-Ed25519 key, a missing secret, or a secret that is not
+parsable PEM:
+
+```text
+committed public key     3adb5b01b40cbc85
+UPDATE_SIGNING_KEY public 3adb5b01b40cbc85
+UPDATE_SIGNING_KEY matches the committed public key
+```
+
+The same check runs locally, without copying the key anywhere:
+
+```bash
+UPDATE_SIGNING_KEY="$(cat update-signing-key.pem)" node scripts/check-signing-key.mjs
+```
+
 To verify a downloaded release locally, download every asset and both sidecar
 types into one directory, then run:
 
@@ -156,9 +177,15 @@ the old public key:
    node scripts/sign-release.mjs --verify --public-key old-update-signing-key.pub.pem dist
    ```
 
-3. Switch `UPDATE_SIGNING_KEY` to the new private key and publish subsequent
-   releases normally.
+3. Switch `UPDATE_SIGNING_KEY` to the new private key, run **Verify update
+   signing key** to confirm the secret matches the committed public key, then
+   publish subsequent releases normally.
 
 Never replace the embedded key and the secret in the same release without that
 transitional step, or already-installed clients will reject every future
 update.
+
+Rotating before the first signed release ships needs no transitional release:
+no published build pins the old key yet, so the public key and the secret can be
+replaced together. `v0.3.0` predates the pin, which is why the first signed
+release can use a fresh key.
