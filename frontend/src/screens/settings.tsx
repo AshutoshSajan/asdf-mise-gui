@@ -37,6 +37,7 @@ import {
   useSettings,
   useStatus,
   useUpdateStatus,
+  useWSLDistros,
 } from "../lib/query";
 import { errorMessage, formatBytes, shortenPath, statusLabel } from "../lib/format";
 import { applyTheme, normalizeTheme, readStoredTheme, type Theme } from "../lib/theme";
@@ -60,6 +61,12 @@ const ENGINES: { value: "auto" | "asdf" | "mise"; label: string; hint: string }[
   { value: "mise", label: "mise", hint: "Drive the mise CLI" },
 ];
 
+const RUNNERS: { value: "auto" | "native" | "wsl"; label: string; hint: string }[] = [
+  { value: "auto", label: "Auto", hint: "Native first, then WSL2" },
+  { value: "native", label: "Native", hint: "Run on Windows" },
+  { value: "wsl", label: "WSL2", hint: "Run inside a distribution" },
+];
+
 const REPO_URL = "https://github.com/AshutoshSajan/asdf-mise-gui";
 const RELEASES_URL = `${REPO_URL}/releases`;
 
@@ -70,6 +77,7 @@ export function Settings() {
 
   const status = useStatus();
   const settings = useSettings();
+  const wslDistros = useWSLDistros(status.data?.os === "windows");
   const [diagnosticsEnabled, setDiagnosticsEnabled] = useState(false);
   const diagnostics = useDiagnostics(diagnosticsEnabled);
   const updateStatus = useUpdateStatus();
@@ -84,6 +92,8 @@ export function Settings() {
     theme: readStoredTheme(),
     checkForUpdates: true,
     recentProjects: [],
+    runnerMode: "auto",
+    wslDistro: "",
   });
   const [dirty, setDirty] = useState(false);
   const [resetOpen, setResetOpen] = useState(false);
@@ -223,10 +233,29 @@ export function Settings() {
   const activeEngine = form.engine === "auto" ? detection?.engine || "auto" : form.engine;
   const engineLabel = activeEngine === "auto" ? "auto-detect" : activeEngine;
   const isMise = activeEngine === "mise";
-  const binaryLabel = isMise ? "mise binary" : form.engine === "asdf" ? "asdf binary" : "Version manager binary";
+  const isWSLRunner = form.runnerMode === "wsl";
+  const binaryLabel = isWSLRunner
+    ? isMise
+      ? "mise binary in WSL"
+      : "asdf binary in WSL"
+    : isMise
+      ? "mise binary"
+      : form.engine === "asdf"
+        ? "asdf binary"
+        : "Version manager binary";
   const dataDirLabel = isMise ? "MISE_DATA_DIR" : form.engine === "asdf" ? "ASDF_DATA_DIR" : "Data directory";
-  const binaryPlaceholder = isMise ? "auto-detect (e.g. ~/.local/bin/mise)" : "auto-detect (e.g. ~/.asdf/bin/asdf)";
-  const dataDirPlaceholder = isMise ? "auto-detect (e.g. ~/.local/share/mise)" : "auto-detect (e.g. ~/.asdf)";
+  const binaryPlaceholder = isWSLRunner
+    ? "auto-detect inside WSL (e.g. /home/you/.asdf/bin/asdf)"
+    : isMise
+      ? "auto-detect (e.g. ~/.local/bin/mise)"
+      : "auto-detect (e.g. ~/.asdf/bin/asdf)";
+  const dataDirPlaceholder = isWSLRunner
+    ? isMise
+      ? "auto-detect inside WSL (e.g. /home/you/.local/share/mise)"
+      : "auto-detect inside WSL (e.g. /home/you/.asdf)"
+    : isMise
+      ? "auto-detect (e.g. ~/.local/share/mise)"
+      : "auto-detect (e.g. ~/.asdf)";
   const docsURL = isMise ? "https://mise.jdx.dev/" : "https://asdf-vm.com/guide/getting-started.html";
   const infoLabel = `${activeEngine === "auto" ? "Engine" : activeEngine} info`;
 
@@ -359,6 +388,81 @@ export function Settings() {
                   mise, or the reverse.
                 </p>
               </div>
+
+              {status.data?.os === "windows" ? (
+                <div>
+                  <Label>Runner</Label>
+                  <div className="grid gap-2 sm:grid-cols-3">
+                    {RUNNERS.map((runner) => {
+                      const active = form.runnerMode === runner.value;
+                      return (
+                        <button
+                          key={runner.value}
+                          onClick={() => {
+                            if (runner.value === form.runnerMode) return;
+                            setForm((current) => ({
+                              ...current,
+                              runnerMode: runner.value,
+                              binaryPath: "",
+                              dataDir: "",
+                            }));
+                            setDirty(true);
+                          }}
+                          aria-pressed={active}
+                          className={cn(
+                            "rounded-lg border px-3 py-2.5 text-left transition",
+                            active
+                              ? "border-accent/40 bg-accent/[0.07]"
+                              : "border-line bg-canvas/40 hover:border-line-strong",
+                          )}
+                        >
+                          <div className="flex items-center justify-between">
+                            <span className={cn("text-[12px] font-medium", active ? "text-ink" : "text-muted")}>
+                              {runner.label}
+                            </span>
+                            {active ? <CheckCircle2 className="size-3.5 text-accent" /> : null}
+                          </div>
+                          <div className="mt-0.5 text-[10px] leading-relaxed text-faint">{runner.hint}</div>
+                        </button>
+                      );
+                    })}
+                  </div>
+                  <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
+                    Auto prefers a native install, then falls back to WSL2. WSL2 runs the Linux CLI inside the selected
+                    distribution and opens project files through <span className="font-mono">\\wsl.localhost</span>.
+                  </p>
+                  {form.runnerMode === "wsl" ? (
+                    <div className="mt-3">
+                      <Label>WSL distribution</Label>
+                      <Input
+                        value={form.wslDistro}
+                        onChange={(event) => update("wslDistro", event.target.value)}
+                        placeholder={
+                          (wslDistros.data ?? []).length > 0
+                            ? `auto (default: ${(wslDistros.data ?? [])[0]})`
+                            : "auto (default distribution)"
+                        }
+                        list="wsl-distribution-options"
+                        className="font-mono text-[12px]"
+                      />
+                      <datalist id="wsl-distribution-options">
+                        {(wslDistros.data ?? []).map((distro) => (
+                          <option key={distro} value={distro} />
+                        ))}
+                      </datalist>
+                      <p className="mt-1.5 text-[11px] leading-relaxed text-faint">
+                        Leave empty to use the default distribution. Install asdf or mise inside WSL and keep its data
+                        directory on the Linux filesystem.
+                      </p>
+                      {wslDistros.isError ? (
+                        <p className="mt-1 text-[10px] text-warn">
+                          Could not list distributions: {errorMessage(wslDistros.error)}
+                        </p>
+                      ) : null}
+                    </div>
+                  ) : null}
+                </div>
+              ) : null}
 
               <div>
                 <Label>{binaryLabel}</Label>

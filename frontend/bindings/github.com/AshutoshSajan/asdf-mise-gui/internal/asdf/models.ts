@@ -29,6 +29,11 @@ export interface Detection {
     "engine": string;
     "binaryPath": string;
     "dataDir": string;
+    "homeDir"?: string;
+    "configDir"?: string;
+    "runnerMode": string;
+    "wslDistro"?: string;
+    "wslHome"?: string;
     "version": string;
     "source": string;
     "error"?: string;

@@ -44,10 +44,17 @@ func (s *SettingsService) Get() SettingsView {
 func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 	existing := s.rt.Settings()
 	next.RecentProjects = existing.RecentProjects
+	next.RunnerMode = asdf.NormalizeRunnerMode(next.RunnerMode)
+	next.WSLDistro = strings.TrimSpace(next.WSLDistro)
 
-	next.BinaryPath = strings.TrimSpace(expandHome(next.BinaryPath))
-	next.DataDir = strings.TrimSpace(expandHome(next.DataDir))
-	next.DefaultProjectDir = strings.TrimSpace(expandHome(next.DefaultProjectDir))
+	next.BinaryPath = strings.TrimSpace(next.BinaryPath)
+	next.DataDir = strings.TrimSpace(next.DataDir)
+	next.DefaultProjectDir = strings.TrimSpace(next.DefaultProjectDir)
+	if next.RunnerMode != asdf.RunnerWSL {
+		next.BinaryPath = expandHome(next.BinaryPath)
+		next.DataDir = expandHome(next.DataDir)
+		next.DefaultProjectDir = expandHome(next.DefaultProjectDir)
+	}
 
 	switch next.Engine {
 	case "auto", "asdf", "mise":
@@ -63,7 +70,7 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 		return s.Get(), fmt.Errorf("invalid theme %q", next.Theme)
 	}
 
-	if next.BinaryPath != "" {
+	if next.BinaryPath != "" && next.RunnerMode != asdf.RunnerWSL {
 		abs, err := filepath.Abs(next.BinaryPath)
 		if err != nil {
 			return s.Get(), err
@@ -76,13 +83,9 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 		if info.IsDir() || info.Mode()&0o111 == 0 {
 			return s.Get(), fmt.Errorf("%s is not an executable file", abs)
 		}
-		probe := asdf.DetectEngine(next.Engine, abs, next.DataDir)
-		if !probe.Found {
-			return s.Get(), fmt.Errorf("that binary is not a working version manager: %s", probe.Error)
-		}
 	}
 
-	if next.DataDir != "" {
+	if next.DataDir != "" && next.RunnerMode != asdf.RunnerWSL {
 		abs, err := filepath.Abs(next.DataDir)
 		if err != nil {
 			return s.Get(), err
@@ -97,7 +100,23 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 		}
 	}
 
+	probe := asdf.DetectEngineWithOptions(asdf.DetectOptions{
+		Engine:          next.Engine,
+		BinaryOverride:  next.BinaryPath,
+		DataDirOverride: next.DataDir,
+		RunnerMode:      next.RunnerMode,
+		WSLDistro:       next.WSLDistro,
+	})
+	if next.BinaryPath != "" && !probe.Found {
+		return s.Get(), fmt.Errorf("that binary is not a working version manager: %s", probe.Error)
+	}
+
 	if next.DefaultProjectDir != "" {
+		mapped, err := s.hostPathFor(next, probe, next.DefaultProjectDir)
+		if err != nil {
+			return s.Get(), err
+		}
+		next.DefaultProjectDir = mapped
 		abs, err := filepath.Abs(next.DefaultProjectDir)
 		if err != nil {
 			return s.Get(), err
@@ -114,12 +133,36 @@ func (s *SettingsService) Save(next settings.Settings) (SettingsView, error) {
 	return s.Get(), nil
 }
 
+// hostPathFor maps a WSL Linux path to its host UNC path before the settings
+// service validates it with Windows file APIs. When the user leaves the
+// distribution empty, the discovered default distribution is used.
+func (s *SettingsService) hostPathFor(next settings.Settings, probe asdf.Detection, path string) (string, error) {
+	if next.RunnerMode != asdf.RunnerWSL || !strings.HasPrefix(path, "/") {
+		return path, nil
+	}
+	distro := next.WSLDistro
+	if distro == "" {
+		distro = probe.WSLDistro
+	}
+	if distro == "" {
+		return "", fmt.Errorf("choose a WSL distribution to use a Linux project directory")
+	}
+	return asdf.WSLHostPath(distro, path), nil
+}
+
+// WSLDistros lists installed WSL distributions for the settings picker.
+func (s *SettingsService) WSLDistros() ([]string, error) {
+	return asdf.WSLDistros()
+}
+
 func (s *SettingsService) Reset() (SettingsView, error) {
 	next := s.rt.Settings()
 	next.Engine = "auto"
 	next.BinaryPath = ""
 	next.DataDir = ""
 	next.DefaultProjectDir = ""
+	next.RunnerMode = asdf.RunnerAuto
+	next.WSLDistro = ""
 	if _, err := s.rt.SaveSettings(next); err != nil {
 		return s.Get(), err
 	}

@@ -65,7 +65,13 @@ type MiseOutdated struct {
 
 // detectMise locates and validates the mise binary.
 func detectMise(binaryOverride, dataDirOverride string) Detection {
-	d := Detection{Engine: EngineMise, CheckedAt: time.Now().UTC().Format(time.RFC3339)}
+	d := Detection{
+		Engine:     EngineMise,
+		RunnerMode: RunnerNative,
+		HomeDir:    homeDir(),
+		ConfigDir:  MiseConfigDir(),
+		CheckedAt:  time.Now().UTC().Format(time.RFC3339),
+	}
 
 	candidates := candidateBinaries("mise", binaryOverride)
 	var firstErr string

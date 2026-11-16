@@ -454,10 +454,14 @@ Existing `asdf-gui` settings are imported once into the new location.
 | :-- | :-- | :-- |
 | **macOS** | Supported | Native Wails app. Releases ship a universal `.dmg` (arm64 + amd64). Ad-hoc signed, not notarized. |
 | **Linux** | Supported | GTK4 + WebKitGTK 6.0 by default; `gtk3` build tag available for older stacks. Releases ship AppImage, DEB, RPM, and Arch packages. |
-| **Windows** | Supported | Native Wails app with WebView2. Releases ship an NSIS installer and a portable `.exe`. mise is recommended; asdf users should use WSL2. |
+| **Windows** | Supported | Native Wails app with WebView2. Releases ship an NSIS installer and a portable `.exe`. mise is recommended natively; asdf and WSL-hosted toolchains run through the WSL2 runner. |
 
-The runner is deliberately behind a narrow interface, leaving room for a future
-WSL bridge without changing the UI or the operation model.
+The runner sits behind a narrow interface with two implementations: a local
+runner that executes asdf or mise on the host, and a WSL2 runner that executes
+them inside a chosen distribution. Settings → Runner selects auto, native, or
+WSL2; auto prefers a native install and falls back to WSL2 on Windows. Project
+files stay editable through `\\wsl.localhost`, so the app does not need a
+separate WSL build.
 
 ## Development
 
@@ -671,10 +675,12 @@ Trust is mise's security boundary, so asdf mise GUI does not bypass it.
 <br/>
 
 Native Windows builds are published from every tag. They use WebView2 (the
-NSIS installer bootstraps it) and work best with mise. asdf is a Unix shell
-tool, so if your toolchains depend on asdf, install WSL2 and run the Linux
-AppImage inside WSL. Windows 11's WSLg provides the display and audio
-integration.
+NSIS installer bootstraps it) and work best with a native mise install. asdf is
+a Unix shell tool, so the app also ships a WSL2 runner: install asdf or mise
+inside a distribution, then choose Settings → Runner → WSL2. The runner executes
+the Linux CLI inside the distribution and reads project config through
+`\\wsl.localhost`. Windows 11's WSLg is only needed if you prefer to run the
+Linux AppImage inside WSL instead.
 
 </details>
 
@@ -699,7 +705,7 @@ integration.
 - [x] macOS DMG and Windows installer releases
 - [x] In-app update checks with verified AppImage self-update
 - [x] Signed and notarized macOS and Windows artifacts
-- [ ] WSL2 runner bridge
+- [x] WSL2 runner bridge
 - [ ] Multi-project workspaces and richer version comparisons
 
 ## Contributing

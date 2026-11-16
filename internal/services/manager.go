@@ -54,9 +54,13 @@ func (s *ManagerService) Status(refresh bool) Status {
 	env, wsl := environment()
 	logsDir, _ := settings.LogsDir()
 
-	configFile := filepath.Join(homeDir(), ".asdfrc")
+	configFile := filepath.Join(s.rt.HomeDir(), ".asdfrc")
 	if detection.Engine == asdf.EngineMise {
-		configFile = asdf.MiseGlobalConfigPath()
+		if detection.ConfigDir != "" {
+			configFile = filepath.Join(detection.ConfigDir, "config.toml")
+		} else {
+			configFile = asdf.MiseGlobalConfigPath()
+		}
 	}
 	status := Status{
 		Detection:    detection,
@@ -88,7 +92,7 @@ func (s *ManagerService) Status(refresh bool) Status {
 func (s *ManagerService) readPlugins() []asdf.Plugin {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	plugins, err := s.rt.Plugins(ctx, homeDir())
+	plugins, err := s.rt.Plugins(ctx, s.rt.HomeDir())
 	if err != nil {
 		return nil
 	}
@@ -98,7 +102,7 @@ func (s *ManagerService) readPlugins() []asdf.Plugin {
 func (s *ManagerService) readTools() []asdf.ToolVersions {
 	ctx, cancel := context.WithTimeout(context.Background(), 20*time.Second)
 	defer cancel()
-	tools, err := s.rt.Tools(ctx, homeDir())
+	tools, err := s.rt.Tools(ctx, s.rt.HomeDir())
 	if err != nil {
 		return nil
 	}
@@ -150,7 +154,7 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 
 	if detection.Found {
 		ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
-		if info, err := s.rt.EngineInfo(ctx, homeDir()); err == nil {
+		if info, err := s.rt.EngineInfo(ctx, s.rt.HomeDir()); err == nil {
 			diag.EngineInfo = strings.TrimSpace(info)
 		} else if strings.TrimSpace(info) != "" {
 			diag.EngineInfo = strings.TrimSpace(info) + "\n" + err.Error()
@@ -201,7 +205,7 @@ func (s *ManagerService) Diagnostics() Diagnostics {
 	}
 	diag.Checks = append(diag.Checks, Check{Name: "git", Status: gitStatus, Detail: gitDetail})
 
-	shimsPath := filepath.Join(homeDir(), ".asdf", "shims")
+	shimsPath := filepath.Join(s.rt.HomeDir(), ".asdf", "shims")
 	shimsHint := "asdf shims are on PATH"
 	shimsMissing := shimsPath + " is not on PATH; the shell will not see asdf-managed tools"
 	if engine == asdf.EngineMise {
@@ -276,7 +280,7 @@ func environment() (string, bool) {
 		}
 		return "Linux", false
 	case "windows":
-		return "Windows (unsupported)", false
+		return "Windows", false
 	default:
 		return runtime.GOOS, false
 	}
