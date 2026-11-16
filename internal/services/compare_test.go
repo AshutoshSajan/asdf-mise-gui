@@ -58,7 +58,7 @@ func TestBuildComparisons(t *testing.T) {
 	}
 }
 
-func TestBuildComparisonsOutdatedOnlyTreatsOmittedAsCurrent(t *testing.T) {
+func TestBuildComparisonsPartialLatestTreatsOmittedAsCurrent(t *testing.T) {
 	view := buildComparisons(
 		[]ToolView{{Name: "deno", Installed: []string{"1.40.0"}, Current: []string{"1.40.0"}, CurrentInstalled: true}},
 		nil,
@@ -69,6 +69,17 @@ func TestBuildComparisonsOutdatedOnlyTreatsOmittedAsCurrent(t *testing.T) {
 	}
 	if !strings.Contains(view.Items[0].Reason, "mise") {
 		t.Fatalf("reason should mention mise: %q", view.Items[0].Reason)
+	}
+}
+
+func TestBuildComparisonsFailedLatestIsUnknown(t *testing.T) {
+	view := buildComparisons(
+		[]ToolView{{Name: "deno", Installed: []string{"1.40.0"}, Current: []string{"1.40.0"}, CurrentInstalled: true}},
+		nil,
+		false,
+	)
+	if len(view.Items) != 1 || view.Items[0].Status != VersionStatusUnknown {
+		t.Fatalf("unexpected comparison after a failed latest lookup: %+v", view.Items)
 	}
 }
 

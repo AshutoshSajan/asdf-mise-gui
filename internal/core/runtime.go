@@ -84,8 +84,11 @@ func (r *Runtime) SettingsStore() *settings.Store { return r.store }
 
 func (r *Runtime) Settings() settings.Settings { return r.store.Get() }
 
-func (r *Runtime) SaveSettings(next settings.Settings) (asdf.Detection, error) {
-	if err := r.store.Save(next); err != nil {
+// UpdateSettings applies one transactional settings mutation and refreshes
+// engine discovery afterwards. Prefer this over replacing the whole settings
+// snapshot so concurrent workspace changes are preserved.
+func (r *Runtime) UpdateSettings(mutate func(*settings.Settings) error) (asdf.Detection, error) {
+	if err := r.store.Update(mutate); err != nil {
 		return r.Detection(), err
 	}
 	return r.Refresh(), nil

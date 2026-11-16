@@ -17,8 +17,6 @@ import (
 	"github.com/AshutoshSajan/asdf-mise-gui/internal/settings"
 )
 
-const maxWorkspaceProjects = 40
-
 // WorkspaceService manages named groups of project directories and scans them
 // together, so one screen can report on several projects at once.
 type WorkspaceService struct {
@@ -63,6 +61,7 @@ type WorkspaceView struct {
 	ScannedAt       string                 `json:"scannedAt"`
 }
 
+// List returns the saved workspaces.
 func (s *WorkspaceService) List() []settings.Workspace {
 	return s.rt.SettingsStore().Workspaces()
 }
@@ -78,8 +77,8 @@ func (s *WorkspaceService) Save(input WorkspaceInput) (settings.Workspace, error
 	if utf8.RuneCountInString(name) > 80 {
 		return settings.Workspace{}, fmt.Errorf("workspace name is too long")
 	}
-	if len(input.Projects) > maxWorkspaceProjects {
-		return settings.Workspace{}, fmt.Errorf("a workspace can hold at most %d projects", maxWorkspaceProjects)
+	if len(input.Projects) > settings.MaxWorkspaceProjects {
+		return settings.Workspace{}, fmt.Errorf("a workspace can hold at most %d projects", settings.MaxWorkspaceProjects)
 	}
 
 	id := strings.TrimSpace(input.ID)
@@ -89,15 +88,26 @@ func (s *WorkspaceService) Save(input WorkspaceInput) (settings.Workspace, error
 		return settings.Workspace{}, fmt.Errorf("workspace not found: %s", id)
 	}
 
+	projects := s.resolveProjects(input.Projects)
+	if len(projects) == 0 {
+		return settings.Workspace{}, fmt.Errorf("add at least one project to the workspace")
+	}
+
 	workspace := settings.Workspace{
 		ID:       id,
 		Name:     name,
-		Projects: s.resolveProjects(input.Projects),
+		Projects: projects,
 	}
-	if _, err := s.rt.SettingsStore().UpsertWorkspace(workspace); err != nil {
+	list, err := s.rt.SettingsStore().UpsertWorkspace(workspace)
+	if err != nil {
 		return settings.Workspace{}, err
 	}
-	return workspace, nil
+	for _, saved := range list {
+		if saved.ID == workspace.ID {
+			return saved, nil
+		}
+	}
+	return settings.Workspace{}, fmt.Errorf("workspace was not persisted")
 }
 
 func (s *WorkspaceService) Delete(id string) ([]settings.Workspace, error) {
@@ -161,8 +171,13 @@ func scanWorkspace(workspace settings.Workspace, open func(string, bool) (Projec
 			Warnings: []string{},
 		}
 		info, err := os.Stat(dir)
-		if err != nil || !info.IsDir() {
+		if err != nil {
 			project.Warnings = append(project.Warnings, "Project directory is missing.")
+			view.Projects = append(view.Projects, project)
+			continue
+		}
+		if !info.IsDir() {
+			project.Warnings = append(project.Warnings, "Project path is not a directory.")
 			view.Projects = append(view.Projects, project)
 			continue
 		}

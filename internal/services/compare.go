@@ -48,14 +48,20 @@ func (s *ToolsService) Compare() (VersionComparisonView, error) {
 		return VersionComparisonView{}, err
 	}
 	latest, latestErr := s.LatestAll()
-	view := buildComparisons(tools, latest, s.rt.IsMise())
+	// mise's outdated output is authoritative only when the command succeeded.
+	// After a failure an omitted tool is unknown, not current.
+	latestIsPartial := s.rt.IsMise() && latestErr == nil
+	view := buildComparisons(tools, latest, latestIsPartial)
 	if latestErr != nil {
 		view.Warning = fmt.Sprintf("Latest versions are unavailable: %s", latestErr)
 	}
 	return view, nil
 }
 
-func buildComparisons(tools []ToolView, latest []asdf.LatestVersion, outdatedOnly bool) VersionComparisonView {
+// buildComparisons joins active pins, installed versions, and latest versions.
+// latestIsPartial means the latest list only contains tools that can move, as
+// with `mise outdated`, so an omitted tool is current rather than unknown.
+func buildComparisons(tools []ToolView, latest []asdf.LatestVersion, latestIsPartial bool) VersionComparisonView {
 	latestByTool := map[string]asdf.LatestVersion{}
 	for _, item := range latest {
 		name := strings.ToLower(strings.TrimSpace(item.Tool))
@@ -107,7 +113,7 @@ func buildComparisons(tools []ToolView, latest []asdf.LatestVersion, outdatedOnl
 					item.Reason = fmt.Sprintf("Latest %s is available; the pin is %s.", item.Latest, strings.Join(pinned, " "))
 				}
 			}
-		case outdatedOnly:
+		case latestIsPartial:
 			item.Status = VersionStatusCurrent
 			item.Reason = "No update reported by mise."
 		default:
