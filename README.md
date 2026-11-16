@@ -595,7 +595,9 @@ A final job writes `checksums.txt` with `sha256sum`, signs every artifact with
 the `UPDATE_SIGNING_KEY` secret, verifies each signature against the pinned
 public key, and publishes every package and `.sig` sidecar in one GitHub
 release. A missing signing secret fails the publish rather than shipping a
-release that current builds would reject.
+release that current builds would reject. After rotating the secret, run the
+**Verify update signing key** workflow: it compares the secret against the pinned
+public key and prints fingerprints only, so a bad tag is caught before it exists.
 
 The updater resolves the AppImage by `asdf-mise-gui-linux-<arch>.AppImage`. Keep
 that pattern when changing packaging, or AppImage self-update will stop finding

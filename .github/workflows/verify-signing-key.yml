@@ -1,0 +1,33 @@
+name: Verify update signing key
+
+# The release workflow only exercises UPDATE_SIGNING_KEY from a tag, because the
+# publish job is tag-gated. That leaves no way to confirm a rotated secret
+# before cutting a release, and a bad tag ships no assets. This workflow checks
+# the secret against the committed public key on demand. It prints fingerprints
+# only, never key material.
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: verify-signing-key-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    name: Secret matches committed public key
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
+      - name: Compare UPDATE_SIGNING_KEY with internal/version/update-signing-key.pub.pem
+        env:
+          UPDATE_SIGNING_KEY: ${{ secrets.UPDATE_SIGNING_KEY }}
+        run: node scripts/check-signing-key.mjs
