@@ -411,6 +411,14 @@ jobs:
       - windows
     runs-on: ubuntu-24.04
     steps:
+      # The signing step below runs scripts/sign-release.mjs, so the tagged tree
+      # has to be on disk. download-artifact only brings the built files.
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-node@v7
+        with:
+          node-version: 24
+
       - uses: actions/download-artifact@v7
         with:
           path: dist
